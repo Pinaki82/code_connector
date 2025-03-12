@@ -10,7 +10,7 @@ The Code Connector plugin is designed to enhance the Vim editing experience by p
    Add the following line to your `.vimrc` file:
    
    ```vimscript
-   Plug 'Pinaki82/Code-Connector'
+   Plug 'https://github.com/Pinaki82/code_connector.git'
    ```
    
    Then run `:PlugInstall` in Vim to install the plugin.

@@ -1,0 +1,178 @@
+*code_connector.txt*    Code Connector Plugin Documentation
+
+==============================================================================
+CONTENTS                                                  *code-connector-contents*
+
+    1. Overview ............................ |code-connector-overview|
+    2. Installation ........................ |code-connector-installation|
+    3. Usage ............................... |code-connector-usage|
+    4. Configuration ....................... |code-connector-configuration|
+    5. Repository .......................... |code-connector-repository|
+    6. Building and Running ................ |code-connector-building|
+    7. Example Commands .................... |code-connector-examples|
+    8. CMakeLists.txt ...................... |code-connector-cmakelists|
+    9. Source Files ........................ |code-connector-source-files|
+   10. Header Files ........................ |code-connector-header-files|
+   11. Snippets and Templates .............. |code-connector-snippets|
+   12. Logging ............................. |code-connector-logging|
+   13. Contributing ........................ |code-connector-contributing|
+
+==============================================================================
+1. OVERVIEW                                            *code-connector-overview*
+
+The Code Connector plugin enhances the Vim editing experience by providing
+function parameter completion, code snippets, and more. It uses LLVM Clang for
+code completion and is designed to work seamlessly with C/C++ projects.
+
+==============================================================================
+2. INSTALLATION                                     *code-connector-installation*
+
+To install the Code Connector plugin, follow these steps:
+
+1. Place the `code_connector.vim` file in your Vim plugin directory (e.g.,
+   `~/.vim/plugin/` on Unix-like systems or `~/vimfiles/plugin/` on Windows).
+
+2. Create two files in your project root directory:
+   - `.ccls`
+   - `compile_flags.txt`
+
+3. For more detailed instructions, refer to the CCLS_GEN repository:
+   https://github.com/Pinaki82/Tulu-C-IDE/tree/main/CCLS_GEN
+
+==============================================================================
+3. USAGE                                               *code-connector-usage*
+
+The plugin provides the following functionality:
+
+- Press `<C-CR>` (Ctrl+Enter) to complete function parameters and keywords.
+- After typing a function name, add the first opening bracket (e.g., `double
+  result = remainderf(`) and press Enter.
+- Always press the Enter key after the first opening bracket to
+  trigger completion.
+
+==============================================================================
+4. CONFIGURATION                                 *code-connector-configuration*
+
+The plugin supports the following configuration options:
+
+- |g:disable_codeconnector|        Disable the Code Connector plugin.
+                                  Default: 0 (enabled).
+
+- |g:completekey|                 The key used to complete function parameters
+                                  and keywords.
+                                  Default: `<C-CR>`.
+
+- |g:rs| and |g:re|               Region start and stop markers. These can be
+                                  customized as needed.
+                                  Default: Not specified (plugin-specific).
+
+- |g:user_defined_snippets|       File name of user-defined snippets.
+                                  Default: Not specified (plugin-specific).
+
+- |g:CodeComplete_Ignorecase|     Enable case-insensitive keyword completion.
+                                  Default: 0 (disabled).
+
+Example configuration in your |vimrc|:
+>
+    let g:disable_codeconnector = 0
+    let g:completekey = '<C-CR>'
+    let g:CodeComplete_Ignorecase = 1
+<
+==============================================================================
+5. REPOSITORY                                       *code-connector-repository*
+
+For more information, visit the Tulu-C-IDE repository:
+https://github.com/Pinaki82/Tulu-C-IDE
+
+==============================================================================
+6. BUILDING AND RUNNING                             *code-connector-building*
+
+The plugin can be built on both Linux and Windows platforms. Follow the
+instructions below for your platform.
+
+Linux: >
+    mkdir -p build
+    cd build
+    cmake ..
+    make config=Debug platform=Linux
+    Or,
+    make config=Release platform=Linux
+<
+Windows: >
+    mkdir build
+    cd build
+    cmake -G "MinGW Makefiles" ..
+    mingw32-make config=Debug
+    Or,
+    mingw32-make config=Release
+<
+==============================================================================
+7. EXAMPLE COMMANDS                                 *code-connector-examples*
+
+Below are example commands to run the plugin's executable on Linux and Windows.
+
+Linux: >
+    ./code_connector_executable file.c 12 24
+    ./code_connector_executable file1.c 10 13
+    ./code_connector_executable file2.c 9 13
+<
+Windows: >
+    code_connector_executable.exe file.c 12 24
+    code_connector_executable.exe file1.c 10 13
+    code_connector_executable.exe file2.c 9 13
+<
+==============================================================================
+8. CMAKELISTS.TXT                                 *code-connector-cmakelists*
+
+The `CMakeLists.txt` file is used to configure the build process for the
+plugin. It supports both Linux and Windows platforms and includes settings for
+different build types (Debug and Release).
+
+==============================================================================
+9. SOURCE FILES                                 *code-connector-source-files*
+
+The plugin includes the following source files:
+
+- `ccls_index_gen_windows.c`       Windows-specific implementation for
+                                   generating CCLS index.
+- `code_connector_executable.c`    Main executable for code completion.
+- `code_connector_executable_windows.c` Windows-specific implementation for
+                                   code completion.
+- `code_connector_shared.c`        Shared library for common functionality.
+- `code_connector_shared_windows.c` Windows-specific implementation for shared
+                                   library.
+
+==============================================================================
+10. HEADER FILES                               *code-connector-header-files*
+
+The plugin includes the following header files:
+
+- `code_connector_shared.h`        Header file for shared library.
+
+==============================================================================
+11. SNIPPETS AND TEMPLATES                      *code-connector-snippets*
+
+The plugin includes a variety of code snippets and templates for C and C++
+languages. These can be customised and extended to fit specific needs.
+
+To define your own snippets, configure the |g:user_defined_snippets| option to
+point to a file containing your custom snippets.
+
+==============================================================================
+12. LOGGING                                       *code-connector-logging*
+
+The plugin includes a logging mechanism to help with debugging and monitoring.
+Logs are written to the following locations:
+
+- Linux: `/tmp/vim_parser_log.txt`
+- Windows: `C:\Temp\vim_parser_log.txt`
+
+==============================================================================
+13. CONTRIBUTING                               *code-connector-contributing*
+
+Contributions to the Code Connector plugin are welcome! Please follow the
+guidelines in the repository for submitting pull requests and reporting issues:
+https://github.com/Pinaki82/Tulu-C-IDE
+
+==============================================================================
+ vim:tw=78:ts=8:noet:ft=help:norl:

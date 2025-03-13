@@ -16,7 +16,7 @@ The Code Connector plugin is designed to enhance the Vim editing experience by p
    Then run `:PlugInstall` in Vim to install the plugin.
 
 2. **Manual Installation**:
-   Place the `code_connector` folder in your Vim plugin directory (e.g., `~/.vim/plugin`).
+   Place the `code_connector` folder in your Vim plugin directory (e.g., `~/.vim/plugin`) and the help file in the `~/.vim/doc` directory.
 
 3. **Project Configuration**:
    Create two files in the project root directory: `.ccls` and `compile_flags.txt`. For detailed instructions on generating these files, refer to the [CCLS_GEN](https://github.com/Pinaki82/Tulu-C-IDE/tree/main/CCLS_GEN) directory of the [Tulu-C-IDE](https://github.com/Pinaki82/Tulu-C-IDE) repository.
@@ -29,13 +29,19 @@ The Code Connector plugin is designed to enhance the Vim editing experience by p
   Press `<C-CR>` (Ctrl+Enter) to complete function parameters with placeholders once the function name completion is obtained from a LLVM Clang-based completion plugin.
   
   - Add the first bracket, i.e., `(` after the function name in Insert Mode, such as `double result = remainderf(`, and hit Enter. Placeholders can be selected by pressing Ctrl+Enter.
-  - **Always press the Enter key after the first bracket.**
+  - **NOTE: Always press the Enter key after the first opening bracket of a function to trigger completion.**
 
 - **Code Snippets**:
   Press `<C-x>` followed by `<C-CR>` ('CTRL + x' and then 'CTRL + Enter') to get a list of available code snippets. Select a snippet using the Up/Down Arrow keys. Snippet names are abbreviated.
+  
+  - NOTE: After typing a **snippet** abbreviation, **do not include a bracket**. Expanding it doesn't require a bracket, and doing so will result in unintended outcomes.
 
 - **Reloading the Buffer**:
   If an undesirable output gets in the way, reload the buffer using the [Reload-Button](https://github.com/Pinaki82/Reload-Button) plugin or press `u` in the Normal Mode.
+
+Please rewrite:
+
+TIP: [vim-jsnippets](https://github.com/Pinaki82/vim-jsnippets.git) and this Vim plugin is an ideal combination.
 
 ## Configuration
 

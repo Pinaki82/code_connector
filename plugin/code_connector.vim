@@ -526,12 +526,12 @@ let g:template['c']['in'] = "#include \"\"\<left>"
 let g:template['c']['is'] = "#include <>\<left>"
 let g:template['c']['ff'] = "#ifndef  __\<c-r>=GetFileName()\<cr>__\<CR>#define  __\<c-r>=GetFileName()\<cr>__".
             \repeat("\<cr>",5)."#endif  /* __\<c-r>=GetFileName()\<cr>__ */".repeat("\<up>",3)
-let g:template['c']['for'] = "for (".g:rs."init".g:re."; ".g:rs."condition".g:re."; ".g:rs."increment".g:re.") {\<cr>}."
+let g:template['c']['for'] = "for (".g:rs."init".g:re."; ".g:rs."condition".g:re."; ".g:rs."increment".g:re.") {\<cr>}"
 let g:template['c']['main'] = "int main(int argc, char \*argv\[\]) {\<cr>".g:rs."...".g:re."\<cr>}"
-let g:template['c']['switch'] = "switch ( ".g:rs."...".g:re." )\<cr>{\<cr>case ".g:rs."...".g:re." :\<cr>break;\<cr>case ".
+let g:template['c']['switch'] = "switch ( ".g:rs."...".g:re." ) {\<cr>case ".g:rs."...".g:re." :\<cr>break;\<cr>case ".
             \g:rs."...".g:re." :\<cr>break;\<cr>default :\<cr>break;\<cr>}"
-let g:template['c']['if'] = "if( ".g:rs."...".g:re." )\<cr>{\<cr>".g:rs."...".g:re."\<cr>}"
-let g:template['c']['ifelse'] = "if (".g:rs."condition".g:re.") {\<cr>}.\<cr>else {\<cr>}."
+let g:template['c']['if'] = "if( ".g:rs."...".g:re." ) {\<cr>".g:rs."...".g:re."\<cr>}"
+let g:template['c']['ifelse'] = "if (".g:rs."condition".g:re.") {\<cr>}\<cr>else {\<cr>}"
 let g:template['c']['while'] = "while (".g:rs."condition".g:re.") {\<cr>".g:rs."...".g:re."\<cr>}"
 let g:template['c']['ife'] = "if( ".g:rs."...".g:re." )\<cr>{\<cr>".g:rs."...".g:re."\<cr>}\<cr>else\<cr>{\<cr>".g:rs."...".
             \g:re."\<cr>}"

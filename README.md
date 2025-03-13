@@ -20,6 +20,8 @@ The Code Connector plugin is designed to enhance the Vim editing experience by p
 
 3. **Project Configuration**:
    Create two files in the project root directory: `.ccls` and `compile_flags.txt`. For detailed instructions on generating these files, refer to the [CCLS_GEN](https://github.com/Pinaki82/Tulu-C-IDE/tree/main/CCLS_GEN) directory of the [Tulu-C-IDE](https://github.com/Pinaki82/Tulu-C-IDE) repository.
+   
+   NOTE: The `.ccls` and `compile_flags.txt` files should be placed at least one directory level up from the source files, not alongside the source. A blank project, `blankTuluCIDEproj.zip`, is provided for reference to the correct directory structure.
 
 ## Usage
 

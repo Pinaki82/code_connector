@@ -36,6 +36,11 @@ To install the Code Connector plugin, follow these steps:
    - `.ccls`
    - `compile_flags.txt`
 
+   NOTE: The `.ccls` and `compile_flags.txt` files should be placed at
+   least one directory level up from the source files, not alongside the source.
+   A blank project, `blankTuluCIDEproj.zip`, is provided for reference to the
+   correct directory structure.
+
 3. For more detailed instructions, refer to the CCLS_GEN repository:
    https://github.com/Pinaki82/Tulu-C-IDE/tree/main/CCLS_GEN
 

@@ -59,15 +59,14 @@ The plugin provides the following functionality:
 - After typing a snippet abbreviation, do not include a bracket.
   Expanding it doesn't require a bracket, and doing so will result
   in unintended outcomes.
+- TIP: [vim-jsnippets](https://github.com/Pinaki82/vim-jsnippets.git)
+  and [code_connector](https://github.com/Pinaki82/code_connector.git) is an
+  ideal combination.
 
 Reloading the Buffer:
 If an undesirable output gets in the way, reload the buffer using the
 [Reload-Button](https://github.com/Pinaki82/Reload-Button) plugin or
 press `u` in the Normal Mode.
-
-TIP: [vim-jsnippets](https://github.com/Pinaki82/vim-jsnippets.git)
-and [code_connector](https://github.com/Pinaki82/code_connector.git) is an
-ideal combination.
 
 ==============================================================================
 4. CONFIGURATION                                 *code-connector-configuration*

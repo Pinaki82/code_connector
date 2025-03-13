@@ -39,7 +39,7 @@ The Code Connector plugin is designed to enhance the Vim editing experience by p
 - **Reloading the Buffer**:
   If an undesirable output gets in the way, reload the buffer using the [Reload-Button](https://github.com/Pinaki82/Reload-Button) plugin or press `u` in the Normal Mode.
 
-Please rewrite:
+
 
 TIP: [vim-jsnippets](https://github.com/Pinaki82/vim-jsnippets.git) and this Vim plugin is an ideal combination.
 

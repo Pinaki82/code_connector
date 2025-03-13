@@ -35,13 +35,11 @@ The Code Connector plugin is designed to enhance the Vim editing experience by p
   Press `<C-x>` followed by `<C-CR>` ('CTRL + x' and then 'CTRL + Enter') to get a list of available code snippets. Select a snippet using the Up/Down Arrow keys. Snippet names are abbreviated.
   
   - NOTE: After typing a **snippet** abbreviation, **do not include a bracket**. Expanding it doesn't require a bracket, and doing so will result in unintended outcomes.
+  
+  - TIP: [vim-jsnippets](https://github.com/Pinaki82/vim-jsnippets.git) and this Vim plugin is an ideal combination.
 
 - **Reloading the Buffer**:
   If an undesirable output gets in the way, reload the buffer using the [Reload-Button](https://github.com/Pinaki82/Reload-Button) plugin or press `u` in the Normal Mode.
-
-
-
-TIP: [vim-jsnippets](https://github.com/Pinaki82/vim-jsnippets.git) and this Vim plugin is an ideal combination.
 
 ## Configuration
 

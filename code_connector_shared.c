@@ -198,6 +198,9 @@ int create_default_config_files(const char *directory) {
    path until it finds both .ccls and compile_flags.txt in the same directory, or reaches the root (/).
    If found, the directory path is stored in found_at. If not found by the root, it returns an error.
 
+   Note: On UNIX, ccls expects these files to be in a parent directory of the source files (e.g., /project
+   for source in /project/src), not alongside them. This is a quirk not present in the Windows version.
+
    @param path      The directory path from which to start the search (e.g., source code directory).
    @param found_at  A buffer to store the path where the files were found (must be PATH_MAX size).
    @return          0 if the files are found; non-zero otherwise.
@@ -231,6 +234,8 @@ int findFiles(const char *path, char *found_at) {
 
   snprintf(currentPath, PATH_MAX, "%s", abs_path);
   free(abs_path);
+  // Debug: Log the current directory being checked
+  // printf("DEBUG: Checking directory: %s\n", currentPath);
   // Open the current directory
   dir = opendir(currentPath);
 
@@ -239,7 +244,7 @@ int findFiles(const char *path, char *found_at) {
     return 1; // Return error code
   }
 
-  // Read each entry in the directory to search for .ccls and compile_flags.txt
+  // Scan for .ccls and compile_flags.txt by reading each entry in the directory
   while((entry = readdir(dir)) != NULL) {
     if(strcmp(entry->d_name, ".ccls") == 0) {  // Check if the entry is .ccls
       cclsFound = 1;
@@ -253,14 +258,17 @@ int findFiles(const char *path, char *found_at) {
   // Close the directory stream after reading all entries
   closedir(dir);
 
-  // Check if both .ccls and compile_flags.txt are found in the current directory,  store the path and return success
+  // If both files are found, store the path and return success
   if(cclsFound && compileFlagsFound) {
     snprintf(found_at, PATH_MAX, "%s", currentPath);
+    // Debug: Log where files were found
+    // printf("DEBUG: Files found at: %s\n", found_at);
     return 0; // Success: files found
   }
 
   // If at root and files not found, fail
   if(strcmp(currentPath, "/") == 0) {
+    // printf("DEBUG: Reached root, files not found\n");
     return 1;  // Return error code
   }
 

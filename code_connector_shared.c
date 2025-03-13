@@ -192,31 +192,24 @@ int create_default_config_files(const char *directory) {
 }
 
 /**
-   Finds the .ccls and compile_flags.txt files in the directory tree starting from the given path.
+   Finds the .ccls and compile_flags.txt files in the directory tree starting from the given path (UNIX-specific).
 
-   This function recursively searches for .ccls and compile_flags.txt files by moving up the directory
-   hierarchy starting from the specified path. If both files are found in a directory, that directory's
-   path is stored in the found_at buffer. If the files are not found after reaching the root directory,
-   the function returns an error.
+   This function recursively searches upward through the directory hierarchy starting from the specified
+   path until it finds both .ccls and compile_flags.txt in the same directory, or reaches the root (/).
+   If found, the directory path is stored in found_at. If not found by the root, it returns an error.
 
-   @param path      The directory path from which to start the search.
+   @param path      The directory path from which to start the search (e.g., source code directory).
    @param found_at  A buffer to store the path where the files were found (must be PATH_MAX size).
    @return          0 if the files are found; non-zero otherwise.
 */
 int findFiles(const char *path, char *found_at) {
   DIR *dir;                            // Directory stream pointer
   struct dirent *entry;                // Directory entry structure
-  char currentPath[PATH_MAX];          // Buffer to hold the current directory path
-  char cclsPath[PATH_MAX];             // Buffer to hold the .ccls path
-  char compileFlagsPath[PATH_MAX];     // Buffer to hold the compile_flags.txt path
-  int cclsFound = 0;                   // Flag to track if .ccls is found
-  int compileFlagsFound = 0;           // Flag to track if compile_flags.txt is found
-  // Initialise all variables to NULL
-  memset(currentPath, 0, PATH_MAX);
-  memset(cclsPath, 0, PATH_MAX);
-  memset(compileFlagsPath, 0, PATH_MAX);
+  char currentPath[PATH_MAX] = {0};    // Buffer for current directory path
+  int cclsFound = 0;                   // Flag for .ccls
+  int compileFlagsFound = 0;           // Flag for compile_flags.txt
 
-  // Ensure the input path is not NULL to prevent invalid memory access
+  // Validate inputs
   if(path == NULL) {
     fprintf(stderr, "fn findFiles: Path is NULL\n");
     return 1; // Return error code
@@ -228,7 +221,7 @@ int findFiles(const char *path, char *found_at) {
     return 1; // Return error code
   }
 
-  // Resolve the absolute path of the given directory to handle relative paths and symbolic links
+  // Resolve absolute path of the starting directory to handle relative paths and symbolic links
   char *abs_path = realpath(path, NULL);
 
   if(abs_path == NULL) {  // realpath fails, possibly due to invalid path or permissions
@@ -236,22 +229,9 @@ int findFiles(const char *path, char *found_at) {
     return 1; // Return error code
   }
 
-  // Create a temporary copy of the absolute path to avoid issues with dirname modifying the original
-  char *currentPathCopy = strdup(abs_path); // Duplicate the path string
-  free(abs_path); // Free the original path allocation after duplication
-  // Extract the directory name from the path using dirname
-  char *dir_path = dirname(currentPathCopy);
-
-  if(dir_path == NULL) {  // dirname fails, indicating an invalid path
-    perror("dirname"); // Print detailed error message
-    free(currentPathCopy); // Free the duplicated path copy
-    return 1; // Return error code
-  }
-
-  // Copy the directory path into the currentPath buffer, ensuring it's null-terminated
-  snprintf(currentPath, PATH_MAX, "%s", dir_path);
-  free(currentPathCopy); // Free the duplicated path copy after extracting the directory name
-  // Open the directory for reading its contents
+  snprintf(currentPath, PATH_MAX, "%s", abs_path);
+  free(abs_path);
+  // Open the current directory
   dir = opendir(currentPath);
 
   if(!dir) {  // opendir fails, could be due to permission issues or non-existent directory
@@ -263,49 +243,48 @@ int findFiles(const char *path, char *found_at) {
   while((entry = readdir(dir)) != NULL) {
     if(strcmp(entry->d_name, ".ccls") == 0) {  // Check if the entry is .ccls
       cclsFound = 1;
-      // Construct the full path to .ccls and store it in cclsPath
-      snprintf(cclsPath, PATH_MAX + EXTRA_BUFFER, "%s/.ccls", currentPath);
     }
 
     else if(strcmp(entry->d_name, "compile_flags.txt") == 0) {    // Check if the entry is compile_flags.txt
       compileFlagsFound = 1;
-      // Construct the full path to compile_flags.txt and store it in compileFlagsPath
-      snprintf(compileFlagsPath, PATH_MAX + EXTRA_BUFFER, "%s/compile_flags.txt", currentPath);
     }
   }
 
   // Close the directory stream after reading all entries
   closedir(dir);
 
-  // Check if both .ccls and compile_flags.txt are found in the current directory
+  // Check if both .ccls and compile_flags.txt are found in the current directory,  store the path and return success
   if(cclsFound && compileFlagsFound) {
-    // Resolve the absolute path of the current directory to ensure accuracy
-    if(realpath(currentPath, found_at) == NULL) {
-      perror("realpath"); // Print detailed error message
-      return 1; // Return error code
-    }
-
+    snprintf(found_at, PATH_MAX, "%s", currentPath);
     return 0; // Success: files found
   }
 
-  // If files not found, move up one directory level unless already at root
-  if(strcmp(currentPath, "/") == 0) {  // Check if current directory is the root directory
+  // If at root and files not found, fail
+  if(strcmp(currentPath, "/") == 0) {
+    return 1;  // Return error code
+  }
+
+  // Move up to parent directory and recurse
+  char *currentPathCopy = strdup(currentPath);
+
+  if(!currentPathCopy) {
+    perror("strdup");
     return 1; // Return error code: reached root without finding files
   }
 
-  // Construct the path to the parent directory
-  char parentPath[PATH_MAX];
-  snprintf(parentPath, PATH_MAX + EXTRA_BUFFER, "%s/..", currentPath);
-  // Resolve the parent directory's absolute path
-  char *resolved_parentPath = realpath(parentPath, NULL);
+  char *parentDir = dirname(currentPathCopy);
 
-  if(resolved_parentPath == NULL) {  // realpath fails, possibly due to invalid parent path
-    perror("realpath"); // Print detailed error message
-    return 1; // Return error code
+  if(!parentDir) {
+    perror("dirname");
+    free(currentPathCopy);
+    return 1;
   }
 
-  // Recursively search the parent directory for the files
-  return findFiles(resolved_parentPath, found_at);
+  char parentPath[PATH_MAX] = {0};
+  snprintf(parentPath, PATH_MAX, "%s", parentDir);
+  free(currentPathCopy);
+  // Recursively search the parent
+  return findFiles(parentPath, found_at);
 }
 
 // Function to read the contents of two files and store them in an array

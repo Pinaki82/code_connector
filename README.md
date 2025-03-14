@@ -142,6 +142,10 @@ Ensure this file is placed in the `doc/` directory of Vim or the `doc/` director
 :h code_connector
 ```
 
+## Screencast:
+
+![](assets/code_connector_screencast.webm)
+
 ## Contributing
 
 Contributions are welcome! Please follow the guidelines in the repository for submitting pull requests and reporting issues.

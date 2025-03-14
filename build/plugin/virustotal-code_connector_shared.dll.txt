@@ -1,1 +1,5 @@
-https://www.virustotal.com/gui/file/29a4a4f8a3a287b056237f15c981bdb5419043ebc8392bc0c911af106d12cad2?nocache=1
+https://www.virustotal.com/gui/file/11bc2cb21b1c7ac3f9037e9c05da44396c4ffcac580cdc1a8adcac53e7725f9f?nocache=1
+Microsoft: Program:Win32/Wacapew.C!ml
+https://stackoverflow.com/questions/62364507/compiled-c-executable-is-detected-as-a-virus-by-windows-defender
+https://www.microsoft.com/en-us/wdsi/filesubmission
+https://www.microsoft.com/en-us/wdsi/submission/86f8ae32-2e59-4e01-a9f5-6685380eefe1

@@ -54,12 +54,167 @@ char global_buffer_cpu_arc[MAX_OUTPUT];
   This includes some functions and global variables.
 */
 
+/*
+  Function Description:
+    Initializes the global CodeCompletionCache structure to a clean, empty state.
+    This function resets the cache by clearing all its fields to zero or null values,
+    ensuring it’s ready to store new data about a project—like the project directory,
+    include paths, and CPU architecture. It’s a simple "reset button" for the cache.
+
+  Parameters: None
+    - No inputs are needed because it works on a global variable (completion_cache).
+
+  Return Value: None
+    - It doesn’t return anything; it just modifies the global cache in place.
+
+  Detailed Steps:
+    1. Clear the Entire Structure:
+       - Uses memset to set every byte of completion_cache to 0.
+       - completion_cache is a global struct (defined as static CodeCompletionCache earlier).
+       - This wipes out all fields—like pointers, integers, and arrays—in one go.
+    2. Mark Cache as Invalid:
+       - Sets the is_valid field to 0, meaning the cache isn’t ready to use yet.
+       - is_valid is likely an integer flag in the CodeCompletionCache struct.
+    3. Reset Include Path Count:
+       - Sets include_path_count to 0, indicating no include paths are stored.
+       - include_path_count tracks how many paths (e.g., -I/project/include) are cached.
+
+  Flow and Logic:
+    - Step 1: Wipe the slate clean with memset.
+    - Step 2: Explicitly say “not ready” by setting is_valid to 0.
+    - Step 3: Clear the tally of include paths to 0.
+    - Why this order? Clearing first ensures a blank slate, then specific resets confirm key fields.
+
+  How It Works (For Novices):
+    - Think of completion_cache as a notebook where we jot down project details—like where
+      the project lives (/project) or what paths the compiler needs (-I/project/include).
+    - Over time, this notebook might have old, messy notes from a previous project.
+    - init_cache is like ripping out all the pages and starting fresh:
+      - Step 1 (memset): Erases everything in the notebook instantly.
+      - Step 2 (is_valid = 0): Puts a “Not Ready” sticker on it so no one uses it too soon.
+      - Step 3 (include_path_count = 0): Resets the counter of notes (paths) to zero.
+    - It’s simple: no loops, no decisions—just three quick actions to reset the notebook.
+
+  Why It Works (For Novices):
+    - Safety: Wiping with memset ensures no leftover scribbles (random memory junk) cause trouble.
+    - Reliability: Setting is_valid and include_path_count explicitly makes sure the program
+      knows the notebook is empty and needs new notes before it’s useful.
+    - Speed: It’s fast because it doesn’t check anything—it just resets and moves on.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Global Scope: completion_cache is static and lives for the whole program. Without resetting,
+      old data (e.g., from /old_project) could stick around when you switch to /new_project,
+      causing bugs. This function prevents that.
+    - Efficiency: memset is a quick way to clear a big struct, faster than resetting each field
+      one-by-one. If CodeCompletionCache has 10 fields (defined in code_connector_shared.h),
+      memset handles them all in one shot.
+    - Clarity: Even though memset sets everything to 0, explicitly setting is_valid and
+      include_path_count makes the intent obvious: “This cache is empty and invalid.”
+      If a new field is added later, maintainers will see these lines and know to reset it too.
+    - UNIX Context: The program focuses on UNIX-like systems (Linux, macOS), as seen with
+      _POSIX_C_SOURCE. Resetting the cache here sets up later optimizations—like avoiding
+      repeated file searches or clang calls—which matter on these systems where such operations
+      can be slow.
+    - Simplicity: It’s a small, focused function with one job: reset the cache. This makes it
+      easy to debug and maintain—no surprises or hidden logic.
+
+  Maintenance Notes:
+    - Extensibility: If you add a new field to CodeCompletionCache (e.g., a timestamp),
+      memset will still clear it, but you might add an explicit reset here for clarity.
+    - Performance: The cache speeds up the program by storing data (e.g., CPU architecture
+      from clang --version). This reset ensures that speedup starts fresh each time.
+    - Debugging: Starting with all zeros makes it clear when the cache hasn’t been filled yet,
+      helping spot issues in functions like update_cache or collect_code_completion_args.
+    - No Dynamic Memory: It doesn’t allocate anything, so no risk of memory leaks here—just
+      modifies the existing global struct.
+*/
+
 // Initialize the cache
 void init_cache(void) {
   memset(&completion_cache, 0, sizeof(CodeCompletionCache));
   completion_cache.is_valid = 0;
   completion_cache.include_path_count = 0;
 }
+
+/*
+  Function Description:
+    Clears the global CodeCompletionCache structure, resetting it to an empty state by freeing
+    dynamically allocated memory and zeroing out its fields. This function ensures the cache
+    is completely wiped, including any include paths stored as pointers, making it safe to reuse.
+
+  Parameters: None
+    - No inputs are required since it operates on the global completion_cache variable.
+
+  Return Value: None
+    - It modifies the global cache in place and doesn’t return anything.
+
+  Detailed Steps:
+    1. Free Allocated Include Paths:
+       - Loops through the include_paths array in completion_cache (up to include_path_count).
+       - Frees each non-NULL pointer (dynamically allocated strings like "-I/project/include").
+       - Sets each pointer to NULL after freeing to avoid double-free bugs.
+    2. Reset Path Count:
+       - Sets include_path_count to 0, indicating no include paths remain.
+    3. Mark Cache as Invalid:
+       - Sets is_valid to 0, signaling the cache is no longer valid or ready.
+    4. Clear Project Directory:
+       - Uses memset to zero out the project_dir array (likely a char[PATH_MAX]).
+    5. Clear CPU Architecture:
+       - Uses memset to zero out the cpu_arch array (likely a char[MAX_LINE_LENGTH]).
+
+  Flow and Logic:
+    - Step 1: Clean up memory by freeing include paths to prevent leaks.
+    - Step 2: Reset the counter to reflect the emptied state.
+    - Step 3: Mark the cache as unusable until refreshed.
+    - Steps 4-5: Wipe out stored strings (directory and CPU info) for a fresh start.
+    - Why this order? Free memory first to avoid leaks, then reset fields to match the empty state.
+
+  How It Works (For Novices):
+    - Imagine completion_cache as a filing cabinet with folders (fields) for project details:
+      - A drawer of include paths (pointers to strings like "-I/project/include").
+      - A label for how many paths (include_path_count).
+      - A “Ready” light (is_valid).
+      - A slot for the project folder name (project_dir).
+      - A slot for the CPU type (cpu_arch).
+    - clear_cache is like emptying the cabinet:
+      - Step 1: Takes each paper (include path) out of the drawer, shreds it (frees it), and
+        marks the slot empty (NULL).
+      - Step 2: Erases the tally of papers (sets count to 0).
+      - Step 3: Turns off the “Ready” light (is_valid = 0).
+      - Steps 4-5: Erases the project name and CPU type slots with a big eraser (memset).
+    - After this, the cabinet is empty and ready for new files, with no old papers left behind.
+
+  Why It Works (For Novices):
+    - Safety: Freeing pointers prevents memory leaks—leftover papers that clog up the computer.
+    - Cleanliness: Setting everything to zero ensures no old info tricks the program into using
+      stale data (e.g., an old project directory).
+    - Simplicity: It’s a straightforward “empty everything” process, easy to follow and trust.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Memory Management: The include_paths field is an array of pointers (char**) dynamically
+      allocated elsewhere (e.g., in update_cache via strdup). Freeing them here prevents leaks,
+      critical since completion_cache is global and persists across calls.
+    - Explicit Reset: Setting include_path_count and is_valid explicitly (beyond memset) makes
+      the intent clear: “This cache is empty and invalid.” It’s a safeguard against assuming
+      memset alone is enough.
+    - Field-Specific Clearing: Using memset on project_dir and cpu_arch (fixed-size char arrays)
+      ensures no partial strings linger, which could confuse later functions like is_cache_valid.
+    - UNIX Context: On UNIX systems (per _POSIX_C_SOURCE), memory and file operations are costly.
+      Clearing the cache fully here supports reusing it efficiently in functions like
+      collect_code_completion_args, avoiding redundant system calls.
+    - Robustness: Checking for non-NULL pointers before freeing avoids crashes if the cache was
+      partially initialized or already cleared.
+
+  Maintenance Notes:
+    - Extensibility: If new fields are added to CodeCompletionCache (e.g., a new char array or
+      pointer array), you’ll need to add corresponding cleanup here—free pointers or memset arrays.
+    - Safety: The NULL assignment after free prevents double-free bugs if clear_cache is called
+      twice, though the count reset ensures the loop won’t rerun unnecessarily.
+    - Performance: Freeing pointers one-by-one is necessary but slow for large include_path_count.
+      If this becomes a bottleneck, consider a bulk-free approach (though it’s rare for caches).
+    - Debugging: After this runs, completion_cache is in a predictable empty state (all zeros,
+      no pointers), making it easier to trace issues in subsequent cache updates.
+*/
 
 // Clear the cache
 void clear_cache(void) {
@@ -77,6 +232,81 @@ void clear_cache(void) {
   memset(completion_cache.cpu_arch, 0, MAX_LINE_LENGTH);
 }
 
+/*
+  Function Description:
+    Checks if the global completion_cache is valid and matches the current project directory.
+    This function determines whether the cached data (e.g., include paths, CPU architecture)
+    can be reused for the given project directory, avoiding unnecessary recalculations.
+
+  Parameters:
+    - current_project_dir (const char *): The directory path of the current project (e.g., "/project").
+      It’s a string pointer that doesn’t get modified (const).
+
+  Return Value:
+    - int: Returns 1 (true) if the cache is valid and matches the project directory; 0 (false) otherwise.
+
+  Detailed Steps:
+    1. Quick Validation Checks:
+       - If completion_cache.is_valid is 0 (false), return 0 immediately—cache isn’t ready.
+       - If current_project_dir is NULL, return 0—can’t compare without a valid input.
+    2. Resolve Absolute Path:
+       - Uses realpath to convert current_project_dir into an absolute path (e.g., turns "./project"
+         into "/home/user/project").
+       - Stores the result in a local char array (resolved_current).
+       - If realpath fails (e.g., directory doesn’t exist), return 0.
+    3. Compare Paths:
+       - Compares the resolved current_project_dir with completion_cache.project_dir using strcmp.
+       - Returns 1 if they match (strcmp returns 0), 0 if they don’t.
+
+  Flow and Logic:
+    - Step 1: Check basic conditions—cache must be valid and input must exist.
+    - Step 2: Get the full, real path of the current directory to ensure accurate comparison.
+    - Step 3: Compare the cached project path with the current one; match means cache is usable.
+    - Why this order? Early exits (Step 1) save time; resolving the path (Step 2) ensures precision
+      before the comparison (Step 3).
+
+  How It Works (For Novices):
+    - Think of completion_cache as a labeled box of project tools (include paths, CPU info).
+      It has a tag saying which project it’s for (project_dir) and a “Ready” light (is_valid).
+    - is_cache_valid is like checking if this box is the right one for your current job:
+      - Step 1: Look at the “Ready” light—if it’s off (is_valid = 0) or you forgot to say what job
+        you’re doing (current_project_dir = NULL), say “No, this box won’t work” (return 0).
+      - Step 2: Check the job’s full address (e.g., "/home/user/project") using realpath, because
+        shortcuts like "./project" might confuse things.
+      - Step 3: Compare the job address with the box’s tag—if they’re the same, say “Yes, this
+        box is perfect” (return 1); if not, say “No, wrong box” (return 0).
+    - It’s like making sure you’re using the right toolbox before starting work!
+
+  Why It Works (For Novices):
+    - Safety: Checking is_valid and NULL first prevents crashes or nonsense comparisons.
+    - Accuracy: realpath ensures we’re comparing full paths (e.g., "/project" vs. "/project"),
+      not tricky relative ones (e.g., "./src/../project").
+    - Simplicity: It’s a yes/no question—does the cache match the project? Easy to understand.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Cache Reuse: The function supports the program’s goal of reusing cached data (e.g., in
+      collect_code_completion_args) to skip slow operations like finding .ccls files or running
+      clang --version. It’s a key optimization check.
+    - Robustness: Early returns for invalid states (is_valid = 0 or NULL input) avoid unnecessary
+      work and protect against bad inputs, common in UNIX environments where paths can be tricky.
+    - Path Normalization: realpath handles symbolic links and relative paths, ensuring the
+      comparison isn’t fooled by different ways of writing the same directory (e.g., "/proj"
+      vs. "/project" if linked). This is critical on UNIX (per _POSIX_C_SOURCE).
+    - Minimal Overhead: It only resolves the path if the initial checks pass, keeping it efficient.
+    - Global Dependency: Relies on completion_cache being properly set by init_cache or update_cache,
+      tying it to the program’s caching strategy.
+
+  Maintenance Notes:
+    - Edge Cases: If realpath fails due to permissions or nonexistent paths, it returns 0, which
+      is safe but silent. Consider logging (via log_message) for debugging if this happens often.
+    - Extensibility: If completion_cache grows (e.g., adding a timestamp field), you might check
+      more conditions here (e.g., cache age), but the path check remains the core logic.
+    - Performance: realpath is a system call, so it’s not free. For frequent calls, ensure the
+      cache is usually valid to minimize these checks.
+    - Debugging: A return of 0 could mean invalid cache, bad input, or mismatched paths—logging
+      the reason could clarify which.
+*/
+
 // Check if cache is valid for current project
 int is_cache_valid(const char *current_project_dir) {
   if(!completion_cache.is_valid || !current_project_dir) {
@@ -92,6 +322,94 @@ int is_cache_valid(const char *current_project_dir) {
 
   return strcmp(resolved_current, completion_cache.project_dir) == 0;
 }
+
+/*
+  Function Description:
+    Updates the global completion_cache with new project data, including the project directory,
+    include paths, and CPU architecture. This function refreshes the cache by clearing old data,
+    storing new values, and marking it valid, enabling reuse in future operations.
+
+  Parameters:
+    - project_dir (const char *): The project directory path (e.g., "/project"), not modified.
+    - include_paths (char **): An array of strings (e.g., "-I/project/include") to cache.
+    - path_count (int): The number of strings in include_paths.
+    - cpu_arch (const char *): The CPU architecture (e.g., "x86_64-unknown-linux-gnu"), not modified.
+
+  Return Value: None
+    - Modifies the global completion_cache in place; no return value.
+
+  Detailed Steps:
+    1. Clear Existing Cache:
+       - Calls clear_cache to free old include paths and reset all fields to zero.
+    2. Store Project Directory:
+       - Uses realpath to get the absolute path of project_dir, storing it in completion_cache.project_dir.
+       - If realpath fails (e.g., invalid path), sets is_valid to 0 and exits early.
+    3. Store Include Paths:
+       - Limits path_count to MAX_CACHED_PATHS if it’s too large.
+       - Loops through include_paths, duplicating each string (via strdup) into completion_cache.include_paths.
+       - If any strdup fails, calls clear_cache and exits early.
+    4. Store CPU Architecture:
+       - Copies cpu_arch into completion_cache.cpu_arch with a size limit (MAX_LINE_LENGTH - 1).
+       - Ensures null termination.
+    5. Mark Cache as Valid:
+       - Sets is_valid to 1 if all steps succeed, indicating the cache is ready.
+
+  Flow and Logic:
+    - Step 1: Wipe the slate clean to avoid mixing old and new data.
+    - Step 2: Store the project directory first, as it’s the key identifier.
+    - Step 3: Add include paths, handling memory allocation carefully.
+    - Step 4: Add CPU architecture, a smaller but critical piece.
+    - Step 5: Confirm everything worked by setting is_valid.
+    - Why this order? Clearing first ensures a fresh start; directory sets the context; paths and
+      CPU fill details; validity comes last as a success flag.
+
+  How It Works (For Novices):
+    - Imagine completion_cache as a labeled box where you store project tools:
+      - A tag for the project name (project_dir).
+      - A drawer for include paths (include_paths).
+      - A counter for how many paths (include_path_count).
+      - A note for CPU type (cpu_arch).
+      - A “Ready” light (is_valid).
+    - update_cache is like filling this box with new tools for a job:
+      - Step 1: Empty the box completely (clear_cache) so no old tools get mixed in.
+      - Step 2: Write the job’s full address (e.g., "/home/user/project") on the tag using realpath.
+        If the address is wrong, stop and mark the box “Not Ready.”
+      - Step 3: Copy each tool (include path like "-I/project/include") into the drawer, making
+        a fresh copy (strdup). If copying fails, empty the box and stop.
+      - Step 4: Jot down the CPU type (e.g., "x86_64") on the note, keeping it short.
+      - Step 5: Turn on the “Ready” light (is_valid = 1) if everything fits.
+    - It’s like packing a toolbox for a specific project, ensuring it’s ready to use next time!
+
+  Why It Works (For Novices):
+    - Safety: Clearing first prevents old tools from confusing the new job.
+    - Accuracy: realpath ensures the project address is exact, not a shortcut.
+    - Reliability: Copying strings (strdup) keeps the cache independent of the caller’s data.
+    - Simplicity: Each step builds the cache logically—address, tools, CPU, then “Ready.”
+
+  Why It’s Designed This Way (For Maintainers):
+    - Cache Refresh: Supports the program’s optimization goal (e.g., in collect_code_completion_args)
+      by storing fresh data for reuse, avoiding slow operations like file searches or clang calls.
+    - Memory Ownership: Uses strdup to duplicate include_paths, ensuring the cache owns its data.
+      This prevents issues if the caller frees or modifies the original strings later.
+    - Robustness: Early exits on failure (realpath or strdup) with clear_cache ensure the cache
+      stays consistent—either fully updated or fully cleared, no half-states.
+    - UNIX Focus: realpath aligns with UNIX path handling (per _POSIX_C_SOURCE), resolving links
+      and relative paths for accurate comparisons in is_cache_valid.
+    - Bounds Checking: Limits path_count to MAX_CACHED_PATHS and caps cpu_arch at MAX_LINE_LENGTH,
+      preventing buffer overflows or excessive memory use.
+
+  Maintenance Notes:
+    - Memory Leaks: If strdup fails mid-loop, clear_cache frees prior allocations, avoiding leaks.
+      Ensure MAX_CACHED_PATHS is large enough for typical projects (defined in code_connector_shared.h).
+    - Error Handling: No logging on failure—consider adding log_message calls (e.g., “realpath failed”)
+      for debugging, though silent failure keeps it simple.
+    - Extensibility: New fields in CodeCompletionCache (e.g., compiler version) would need storage
+      here, with similar bounds and failure checks.
+    - Performance: Multiple strdup calls could be slow for many paths; if this bottlenecks, consider
+      a single allocation block, though it’s complex to manage.
+    - Debugging: After success, is_valid = 1 lets you verify the cache in tools like gdb; on failure,
+      it’s reset to 0, signaling issues upstream.
+*/
 
 // Update the cache with new values
 void update_cache(const char *project_dir, char **include_paths, int path_count, const char *cpu_arch) {
@@ -121,6 +439,77 @@ void update_cache(const char *project_dir, char **include_paths, int path_count,
   completion_cache.is_valid = 1;
 }
 
+/*
+  Function Description:
+    Retrieves the cached include paths from the global completion_cache and updates the caller-provided
+    count variable with the number of paths. This function provides access to the cached include paths
+    (e.g., "-I/project/include") if the cache is valid, or signals that no paths are available if it’s not.
+
+  Parameters:
+    - count (int *): A pointer to an integer where the number of cached include paths will be stored.
+      The caller uses this to know how many paths are returned.
+
+  Return Value:
+    - char **: A pointer to an array of strings (include paths) from completion_cache.include_paths if
+      the cache is valid; NULL if the cache is invalid or empty.
+
+  Detailed Steps:
+    1. Check Cache Validity:
+       - If completion_cache.is_valid is 0 (false), the cache isn’t ready.
+       - Sets *count to 0 to indicate no paths are available.
+       - Returns NULL to signal the caller that there’s nothing to use.
+    2. Return Cached Data:
+       - If valid, sets *count to completion_cache.include_path_count (number of paths).
+       - Returns completion_cache.include_paths, the array of cached path strings.
+
+  Flow and Logic:
+    - Step 1: Verify the cache is usable; if not, signal “nothing here” with 0 and NULL.
+    - Step 2: If usable, share the count and paths directly from the cache.
+    - Why this order? Validity check first avoids returning garbage or stale data; then it’s a
+      simple handoff of cached values.
+
+  How It Works (For Novices):
+    - Picture completion_cache as a toolbox with a drawer of tools (include paths like "-I/project/include"),
+      a counter for how many tools (include_path_count), and a “Ready” light (is_valid).
+    - get_cached_include_paths is like asking, “Can I borrow your tools, and how many are there?”
+      - Step 1: Check the “Ready” light. If it’s off (is_valid = 0), say “Sorry, no tools” (set count
+        to 0 and return NULL).
+      - Step 2: If the light’s on, tell them how many tools (set *count to include_path_count) and
+        hand over the drawer (return include_paths).
+    - It’s like a quick check-out system: if the toolbox is ready, you get the tools; if not, you get
+      nothing and know it’s empty.
+
+  Why It Works (For Novices):
+    - Safety: Checking is_valid first ensures you don’t get junk tools from an unready box.
+    - Clarity: *count tells you exactly how many tools you’re getting, so you don’t guess.
+    - Simplicity: It’s a yes/no decision—either you get the paths or you don’t, no fuss.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Cache Access: Part of the caching strategy (e.g., used in collect_code_completion_args) to
+      reuse include paths without recalculating them, boosting performance on UNIX systems where
+      file operations are slow (per _POSIX_C_SOURCE).
+    - Pointer Safety: Returns the actual completion_cache.include_paths array, not a copy, avoiding
+      unnecessary memory allocation. The caller must not free it, as the cache owns it.
+    - Fail-Safe: Returning NULL and setting *count to 0 on invalid cache is a clear signal to fall
+      back to recalculating paths, maintaining program flow (e.g., in collect_code_completion_args).
+    - Minimalist: No extra checks beyond is_valid—assumes update_cache set up the cache correctly,
+      keeping this function fast and focused.
+    - Caller Responsibility: Passing count as a pointer lets the caller manage its own variable,
+      typical in C for output parameters, reducing function complexity.
+
+  Maintenance Notes:
+    - Memory Ownership: The returned char** points to cache memory (allocated by update_cache via
+      strdup). Document that callers must not free it, or risk double-free crashes.
+    - Edge Cases: If is_valid is 1 but include_path_count is 0, it still returns include_paths with
+       count = 0. This is valid (empty array), but ensure callers handle it (e.g., don’t assume paths).
+    - Extensibility: If completion_cache adds new fields (e.g., debug flags), this function stays
+      focused on include paths unless expanded to return more.
+    - Debugging: A return of NULL means invalid cache—log this (via log_message) if it’s frequent,
+      to trace why update_cache isn’t setting is_valid.
+    - Performance: Direct pointer return is fast, but relies on cache integrity. Test is_valid
+      thoroughly in update_cache to avoid false positives.
+*/
+
 // Function to get cached include paths
 char **get_cached_include_paths(int *count) {
   if(!completion_cache.is_valid) {
@@ -131,6 +520,92 @@ char **get_cached_include_paths(int *count) {
   *count = completion_cache.include_path_count;
   return completion_cache.include_paths;
 }
+
+/*
+  Function Description:
+    Creates default `.ccls` and `compile_flags.txt` files in the specified directory if they don’t
+    already exist. These files provide basic configuration for the ccls language server and clang
+    compiler, ensuring the program can function even without user-provided configs.
+
+  Parameters:
+    - directory (const char *): The directory path where the files will be created (e.g., "/project").
+      It’s a constant string, not modified by the function.
+
+  Return Value:
+    - int: Returns 0 on success (both files created or already exist); 1 on failure (e.g., memory
+      allocation or file creation fails).
+
+  Detailed Steps:
+    1. Calculate Path Sizes:
+       - Computes the length of directory and adds space for file names (".ccls", "/compile_flags.txt").
+       - Sets max_path_len to accommodate full paths (directory length + 20 for safety).
+    2. Allocate Memory for Paths:
+       - Dynamically allocates two char arrays (ccls_path, compile_flags_path) for full file paths.
+       - Checks for allocation failure; if either fails, frees both and returns 1.
+    3. Build File Paths:
+       - Initializes the path buffers with zeros using memset.
+       - Uses snprintf to construct full paths (e.g., "/project/.ccls", "/project/compile_flags.txt").
+    4. Create .ccls File:
+       - Opens ccls_path in write mode ("w"); if successful, writes default clang settings.
+       - Writes: "clang\n%c -std=c11\n%cpp -std=c++17\n".
+       - Closes the file; if opening fails, sets return_value to 1.
+    5. Create compile_flags.txt File:
+       - Only proceeds if .ccls creation succeeded (return_value == 0).
+       - Opens compile_flags_path in write mode; if successful, writes default include flags.
+       - Writes: "-I.\n-I..\n-I/usr/include\n-I/usr/local/include\n".
+       - Closes the file; if opening fails, sets return_value to 1.
+    6. Clean Up and Return:
+       - Frees both path buffers.
+       - Returns return_value (0 for success, 1 for any failure).
+
+  Flow and Logic:
+    - Step 1-2: Prepare memory and paths safely before file operations.
+    - Step 3-4: Create .ccls first, as it’s foundational for ccls integration.
+    - Step 5: Create compile_flags.txt only if .ccls succeeds, ensuring partial configs don’t confuse tools.
+    - Step 6: Clean up and report success/failure.
+    - Why this order? Memory allocation first avoids runtime errors; .ccls priority reflects its role;
+      cleanup ensures no leaks.
+
+  How It Works (For Novices):
+    - Imagine you’re setting up a new workshop (directory) and need two instruction sheets:
+      - .ccls: Tells the ccls tool how to read your code (e.g., use C11 or C++17 standards).
+      - compile_flags.txt: Tells clang where to find extra tools (header files).
+    - create_default_config_files is like writing these sheets if they’re missing:
+      - Step 1: Measure how much paper you’ll need (calculate path sizes).
+      - Step 2: Get blank sheets (allocate memory) to write the full addresses.
+      - Step 3: Write the addresses (e.g., "/project/.ccls") on the sheets.
+      - Step 4: Write basic ccls instructions (e.g., "use clang, C11") on the first sheet.
+      - Step 5: If that worked, write clang instructions (e.g., "look in /usr/include") on the second.
+      - Step 6: Throw away your scratch paper (free memory) and say if it all worked (0) or not (1).
+    - It’s like making sure your workshop has basic instructions so tools like clang can start working!
+
+  Why It Works (For Novices):
+    - Safety: Checks memory and file operations, stopping if anything fails.
+    - Usefulness: Provides default settings so the program runs even without custom configs.
+    - Cleanliness: Frees memory so the workshop doesn’t get cluttered.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Fallback Mechanism: Ensures the program (e.g., findFiles, collect_code_completion_args) has
+      config files to work with, critical for UNIX systems (per _POSIX_C_SOURCE) where ccls expects them.
+    - Dynamic Paths: Allocates memory for paths instead of fixed buffers, avoiding overflows if
+      directory is long. The +20 buffer is a safe guess, but PATH_MAX could be used explicitly.
+    - Error Handling: Returns 1 on any failure (memory, file ops), letting callers (e.g., a setup routine)
+      decide how to proceed. No partial configs are left behind due to the .ccls-first check.
+    - Default Content: The .ccls settings (C11, C++17) and compile_flags.txt paths (., .., /usr/include)
+      are sensible UNIX defaults, covering common use cases without user input.
+    - Resource Management: Frees memory even on failure, preventing leaks in a global-context program.
+
+  Maintenance Notes:
+    - Path Length: max_path_len (+20) is arbitrary; consider PATH_MAX for consistency with other
+      functions (e.g., findFiles). Test with long paths to ensure no truncation.
+    - Error Reporting: Silent failures (just return 1) work but could log specifics (via log_message)
+      for debugging (e.g., “fopen failed for .ccls”).
+    - Extensibility: To add more config files or settings, expand the allocation and creation steps,
+      keeping the success-check pattern.
+    - Permissions: Assumes write access to directory; if this fails often (e.g., read-only dirs),
+      consider a fallback location or user warning.
+    - Debugging: Check return_value in callers; a 1 could mean memory or I/O issues—traceable via logs.
+*/
 
 // Function to create default .ccls and compile_flags.txt files
 // Returns 0 on success, 1 on failure
@@ -190,6 +665,93 @@ int create_default_config_files(const char *directory) {
   free(compile_flags_path);
   return return_value;
 }
+
+/*
+  Function Description:
+    Searches upward through the directory tree from a given path to find a directory containing
+    both `.ccls` and `compile_flags.txt` files, storing the found directory path in found_at.
+    This function is recursive and UNIX-specific, designed to locate project configuration files.
+
+  Parameters:
+    - path (const char *): The starting directory to search from (e.g., "/project/src"), not modified.
+    - found_at (char *): A buffer where the path of the directory containing both files is stored.
+      Must be at least PATH_MAX bytes.
+
+  Return Value:
+    - int: Returns 0 if both files are found in a directory; non-zero (typically 1) if not found or an error occurs.
+
+  Detailed Steps:
+    1. Validate Inputs:
+       - Checks if path is NULL; if so, logs an error and returns 1.
+       - Checks if found_at is NULL; if so, logs an error and returns 1.
+    2. Resolve Absolute Path:
+       - Uses realpath to convert path to an absolute path (e.g., "/home/user/project/src").
+       - Stores it in currentPath; if realpath fails (e.g., path doesn’t exist), logs and returns 1.
+    3. Open Directory:
+       - Opens currentPath with opendir; if it fails (e.g., no permissions), logs and returns 1.
+    4. Scan for Files:
+       - Reads directory entries with readdir, checking each for ".ccls" or "compile_flags.txt".
+       - Sets flags (cclsFound, compileFlagsFound) to 1 when found.
+       - Closes the directory after scanning.
+    5. Check Results:
+       - If both files are found (cclsFound && compileFlagsFound), copies currentPath to found_at and returns 0.
+    6. Handle Root Case:
+       - If currentPath is "/" (root) and files aren’t found, returns 1—no higher to search.
+    7. Recurse Upward:
+       - Copies currentPath with strdup; if it fails, logs and returns 1.
+       - Gets the parent directory with dirname; if it fails, logs, frees copy, and returns 1.
+       - Builds parentPath and recursively calls findFiles with it, returning the result.
+
+  Flow and Logic:
+    - Steps 1-2: Ensure inputs and path are valid before proceeding.
+    - Steps 3-4: Check the current directory for both files.
+    - Step 5: If found, save the path and stop.
+    - Step 6: If at root and not found, give up.
+    - Step 7: If not found and not at root, move up and try again.
+    - Why this order? Validation first avoids crashes; checking current directory before recursion
+      minimizes unnecessary calls; root check stops infinite loops.
+
+  How It Works (For Novices):
+    - Imagine you’re looking for two special maps (.ccls and compile_flags.txt) in a stack of folders.
+      You start in one folder (path, like "/project/src") and need to find a folder with both maps,
+      writing its name in a notebook (found_at).
+    - findFiles is like this search:
+      - Step 1: Make sure you have a folder to check (path) and a notebook (found_at)—if not, stop.
+      - Step 2: Get the full folder name (e.g., "/home/user/project/src") using realpath.
+      - Step 3: Open the folder; if you can’t, stop.
+      - Step 4: Look inside for both maps; mark if you find ".ccls" or "compile_flags.txt".
+      - Step 5: If both are there, write the folder name in the notebook and say “Found it!” (return 0).
+      - Step 6: If you’re at the top folder ("/") and they’re not there, say “No luck” (return 1).
+      - Step 7: If not found, move up to the parent folder (e.g., "/project") and check again.
+    - It’s like climbing up a ladder of folders until you find the maps or hit the top!
+
+  Why It Works (For Novices):
+    - Safety: Checks for bad inputs and errors stop it from crashing.
+    - Persistence: Keeps going up until it finds the maps or runs out of folders.
+    - Clarity: Puts the answer (folder path) right where you asked (found_at).
+
+  Why It’s Designed This Way (For Maintainers):
+    - UNIX Quirk: Reflects ccls’s UNIX expectation that config files are in a parent directory
+      (e.g., /project, not /project/src), as noted in the function’s comment. Recursion handles this.
+    - Robustness: Extensive error checking (NULL, realpath, opendir, strdup, dirname) ensures it
+      fails gracefully on bad inputs or system issues, common in UNIX (per _POSIX_C_SOURCE).
+    - Recursion: Climbing up the tree is elegant for finding a project root, avoiding complex loops,
+      though it risks stack overflow with very deep paths (rare in practice).
+    - Memory Safety: Frees abs_path and currentPathCopy to prevent leaks; assumes found_at is
+      caller-allocated (PATH_MAX size), aligning with C conventions.
+    - Efficiency: Stops as soon as both files are found, minimizing directory scans.
+
+  Maintenance Notes:
+    - Stack Depth: Deep directory trees could overflow the stack—test with extreme cases or consider
+      an iterative version if this becomes an issue.
+    - Logging: Errors are logged to stderr (e.g., "realpath failed"), but consider log_message for
+      consistency with other functions.
+    - Extensibility: To search for more files, add checks in Step 4 and update the condition in Step 5.
+    - Performance: opendir/readdir per level isn’t fast; cache results (via completion_cache) reduce
+      calls, as seen in collect_code_completion_args.
+    - Debugging: Uncommented printf lines (e.g., "Checking directory") are handy—enable them to trace
+      the search path if issues arise.
+*/
 
 /**
    Finds the .ccls and compile_flags.txt files in the directory tree starting from the given path (UNIX-specific).
@@ -295,6 +857,85 @@ int findFiles(const char *path, char *found_at) {
   return findFiles(parentPath, found_at);
 }
 
+/*
+  Function Description:
+    Reads lines from two files (.ccls and compile_flags.txt) and stores specific lines containing
+    include flags (-I or -isystem) in a provided array. This function populates the lines array with
+    relevant compiler flags and updates the count of stored lines.
+
+  Parameters:
+    - file1 (const char *): Path to the first file (typically .ccls), not modified.
+    - file2 (const char *): Path to the second file (typically compile_flags.txt), not modified.
+    - lines (char **): An array of string pointers where matching lines are stored. Caller must
+      ensure it’s at least MAX_LINES in size and free the strings later.
+    - count (int *): Pointer to an integer tracking the number of lines stored; updated by the function.
+
+  Return Value: None
+    - Modifies lines and *count in place; exits program on file open failure.
+
+  Detailed Steps:
+    1. Open Files:
+       - Opens file1 and file2 in read mode using fopen.
+       - If either fails (e.g., file missing), prints an error and exits with EXIT_FAILURE.
+    2. Read file1 Lines:
+       - Uses fgets to read each line into a buffer (line, size MAX_LINE_LENGTH).
+       - Skips lines with "-Iinc" (using strstr).
+       - For lines with "-I" or "-isystem", removes newline (strcspn) and duplicates (strdup) into lines.
+       - Increments *count if space remains (less than MAX_LINES - 1).
+    3. Read file2 Lines:
+       - Repeats the same process for file2: reads lines, skips "-Iinc", stores "-I" or "-isystem" lines.
+    4. Clean Up:
+       - Closes both files with fclose.
+
+  Flow and Logic:
+    - Step 1: Open both files; fail fast if either can’t be read.
+    - Step 2: Process file1, filtering and storing relevant lines.
+    - Step 3: Process file2 similarly, appending to the same array.
+    - Step 4: Close files to free resources.
+    - Why this order? Open first ensures access; sequential reading keeps logic simple; cleanup avoids leaks.
+
+  How It Works (For Novices):
+    - Imagine two notebooks (.ccls and compile_flags.txt) with instructions for a tool (clang).
+      You want to copy only the lines about where to find parts (like "-I/project/include") into a
+      list (lines), counting how many you find (count).
+    - read_files is like this copying job:
+      - Step 1: Open both notebooks. If you can’t, yell “Error!” and quit.
+      - Step 2: Read file1 line-by-line. Skip boring lines ("-Iinc"), but if you see "-I" or "-isystem",
+        trim the end (no newline) and copy it to your list, adding to your tally (*count).
+      - Step 3: Do the same for file2, adding more lines to the same list.
+      - Step 4: Close the notebooks when done.
+    - It’s like making a shopping list from two recipe books, picking only the “where to buy” parts!
+
+  Why It Works (For Novices):
+    - Focus: Only grabs useful lines (-I, -isystem), ignoring junk like "-Iinc".
+    - Safety: Stops at MAX_LINES - 1 so your list doesn’t overflow.
+    - Simplicity: Reads one file, then the next, keeping it easy to follow.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Purpose: Extracts include flags for clang (e.g., in collect_code_completion_args), critical for
+      UNIX builds (per _POSIX_C_SOURCE) where project configs drive compilation.
+    - Hard Exit: Exiting on fopen failure assumes these files are essential—without them, the program
+      can’t proceed. This is aggressive but aligns with a setup where configs are expected (e.g., via findFiles).
+    - Filtering: Skipping "-Iinc" is a specific choice—likely a known irrelevant flag in your context.
+      It’s hardcoded, suggesting a narrow use case.
+    - Memory: Uses strdup to store lines, meaning the caller (e.g., store_lines) must free them later.
+      This delegates memory management upstream, typical in C.
+    - Bounds: Caps at MAX_LINES - 1 (leaving space for a NULL terminator or safety), preventing buffer
+      overflows but limiting total flags.
+
+  Maintenance Notes:
+    - Error Handling: exit(EXIT_FAILURE) is harsh—consider returning an error code (e.g., -1) and letting
+      callers handle it, or logging via log_message for debugging.
+    - Flexibility: Hardcoded "-Iinc" skip and "-I"/"-isystem" filter might miss other flags (e.g., "-D").
+      Add a parameter for custom filters if needed.
+    - Memory Leaks: If strdup fails (rare), it silently skips lines—no crash, but incomplete data.
+      Consider logging or checking allocation success.
+    - Buffer Size: MAX_LINE_LENGTH (assumed from code_connector_shared.h) must fit typical flags—test
+      with long paths to avoid truncation.
+    - Debugging: Add printf or log_message to trace which lines are stored, especially if count grows
+      unexpectedly.
+*/
+
 // Function to read the contents of two files and store them in an array
 // Parameters: file1, file2, lines, count
 // Meaning of parameters:
@@ -350,6 +991,78 @@ void read_files(const char *file1, const char *file2, char **lines, int *count) 
   fclose(f2);
 }
 
+/*
+  Function Description:
+    Removes duplicate strings from an array of strings (lines) and updates the count of unique entries.
+    This function ensures the list of include paths (e.g., "-I/project/include") has no repeats,
+    reducing redundancy and potential confusion for tools like clang.
+
+  Parameters:
+    - lines (char **): An array of string pointers containing the lines to process. Strings are assumed
+      to be dynamically allocated (e.g., via strdup) and will be freed if duplicated.
+    - count (int *): Pointer to an integer representing the current number of lines; updated to reflect
+      the number of unique lines after duplicates are removed.
+
+  Return Value: None
+    - Modifies the lines array and *count in place to remove duplicates.
+
+  Detailed Steps:
+    1. Iterate Through Lines:
+       - Uses two nested loops: outer loop (i) picks a line, inner loop (j) checks subsequent lines.
+       - Compares each line (lines[i]) with later lines (lines[j]) using strcmp.
+    2. Detect and Remove Duplicates:
+       - If a match is found (strcmp returns 0), frees the duplicate (lines[j]).
+       - Shifts all subsequent lines left to fill the gap (k loop moves lines[k+1] to lines[k]).
+       - Decrements *count to reflect the removal.
+       - Adjusts j to recheck the new line at j after shifting.
+    3. Continue Until Done:
+       - Outer loop continues until all lines are checked; inner loop adjusts dynamically as count shrinks.
+
+  Flow and Logic:
+    - Step 1: Start at the first line and look ahead for duplicates.
+    - Step 2: When a duplicate is found, erase it, slide everything over, and update the tally.
+    - Step 3: Keep going until no more lines to check.
+    - Why this order? Left-to-right ensures earlier lines stay, later duplicates go; shifting maintains
+      array continuity.
+
+  How It Works (For Novices):
+    - Imagine you have a list of notes (lines) like ["-I/project", "-I/usr", "-I/project"], and you
+      want only unique notes, counting how many are left (count).
+    - remove_duplicates is like cleaning up this list:
+      - Step 1: Pick the first note ("-I/project") and check the rest. The third note matches!
+      - Step 2: Cross out the third note (free it), slide "-I/usr" to the third spot, shorten the list
+        (decrease count), and check again from where you left off.
+      - Step 3: Move to the next note ("-I/usr"), check ahead (no matches), and keep going until done.
+    - It’s like tidying a messy list, tossing repeats, and keeping it neat and short!
+
+  Why It Works (For Novices):
+    - Fairness: Keeps the first copy of each note, removing later ones—simple rule.
+    - Tidiness: Shifts notes so there are no gaps, keeping the list ready to use.
+    - Accuracy: Updates count so you know exactly how many unique notes you have.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Efficiency Goal: Reduces redundant flags for clang (e.g., in collect_code_completion_args),
+      ensuring clean input on UNIX systems (per _POSIX_C_SOURCE) where duplicates could waste time.
+    - In-Place Operation: Modifies lines directly, avoiding new allocations, which is memory-efficient
+      but assumes the caller (e.g., store_lines) is okay with this.
+    - Memory Safety: Frees duplicates immediately, preventing leaks since lines are strdup’d (e.g.,
+      from read_files). Assumes caller frees remaining strings later.
+    - Simple Algorithm: Uses a basic O(n²) comparison with shifting—effective for small lists (typical
+      for include paths) but not optimized for huge arrays.
+    - Stability: Preserves order of first occurrences, which might matter for flag precedence in clang.
+
+  Maintenance Notes:
+    - Performance: For large *count (e.g., >100), O(n²) comparisons slow down—consider a hash table
+      or sorting first (like qsort in store_lines) if this becomes a bottleneck.
+    - Edge Cases: If *count is 0 or 1, it does nothing (safe); test with duplicates at start/end to
+      ensure shifting works.
+    - Memory: Assumes lines[i] are valid pointers—NULLs could crash strcmp. Add a NULL check if
+      read_files might store them.
+    - Extensibility: To ignore case or whitespace in duplicates, tweak strcmp—current exact match
+      is strict but fast.
+    - Debugging: Log (via log_message) when duplicates are found to trace unexpected repeats in configs.
+*/
+
 // Function to remove duplicate lines
 void remove_duplicates(char **lines, int *count) {
   for(int i = 0; i < *count; i++) {
@@ -367,6 +1080,85 @@ void remove_duplicates(char **lines, int *count) {
     }
   }
 }
+
+/*
+  Function Description:
+    Reads include flags from two files (.ccls and compile_flags.txt), removes duplicates, sorts them,
+    and stores the results in two arrays: one for original order (lines) and one sorted (sorted_lines).
+    This function prepares a clean, ordered list of compiler flags for later use (e.g., by clang).
+
+  Parameters:
+    - file1 (const char *): Path to the first file (typically .ccls), not modified.
+    - file2 (const char *): Path to the second file (typically compile_flags.txt), not modified.
+    - lines (char **): Array of string pointers to store the unique lines in original order.
+      Caller must ensure it’s at least MAX_LINES and free the strings later.
+    - sorted_lines (char **): Array to store the same lines, but sorted alphabetically.
+      Same size and ownership rules as lines.
+    - count (int *): Pointer to an integer tracking the number of lines; updated with the final count.
+
+  Return Value: None
+    - Modifies lines, sorted_lines, and *count in place.
+
+  Detailed Steps:
+    1. Read and Store Lines:
+       - Calls read_files to extract "-I" and "-isystem" lines from file1 and file2 into lines.
+       - Updates *count with the initial number of lines found.
+    2. Remove Duplicates:
+       - Calls remove_duplicates on lines, reducing *count to reflect only unique entries.
+    3. Copy to Sorted Array:
+       - Loops through lines, copying each pointer to sorted_lines (up to *count).
+    4. Sort the Lines:
+       - If *count > 0, uses qsort with compare_strings to sort sorted_lines alphabetically.
+
+  Flow and Logic:
+    - Step 1: Gather all relevant lines from both files into lines.
+    - Step 2: Clean up by removing duplicates, keeping lines compact.
+    - Step 3: Duplicate the list into sorted_lines for sorting.
+    - Step 4: Sort sorted_lines if there’s anything to sort.
+    - Why this order? Read first to get raw data; deduplicate for efficiency; copy then sort to
+      preserve original order in lines while providing a sorted version.
+
+  How It Works (For Novices):
+    - Imagine you’re collecting directions from two guidebooks (.ccls and compile_flags.txt) about
+      where to find tools (like "-I/project/include"), and you want two lists: one as-is (lines) and
+      one alphabetized (sorted_lines), counting how many (count).
+    - store_lines is like this organizing task:
+      - Step 1: Flip through both books with read_files, jotting down directions (e.g., "-I/usr",
+        "-I/project") in your first notebook (lines), counting them (*count).
+      - Step 2: Cross out repeats with remove_duplicates (e.g., two "-I/usr" become one), updating
+        your tally.
+      - Step 3: Copy the cleaned list into a second notebook (sorted_lines).
+      - Step 4: If there’s anything in the second notebook, sort it A-to-Z (qsort) so it’s easy to read.
+    - It’s like making two handy lists from messy notes—one raw, one neat and sorted!
+
+  Why It Works (For Novices):
+    - Completeness: Grabs all the directions you need from both books.
+    - Cleanliness: No repeats cluttering things up.
+    - Order: Gives you a sorted version for quick lookup, keeping the original too.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Dual Output: Provides both original (lines) and sorted (sorted_lines) lists, offering flexibility—
+      original order might matter for clang flag precedence, while sorted aids debugging or display.
+    - Integration: Builds on read_files and remove_duplicates, reusing their logic for modularity,
+      key for UNIX config processing (per _POSIX_C_SOURCE).
+    - Efficiency: Removes duplicates before sorting, reducing qsort’s work (O(n log n) vs. larger n).
+      Assumes small *count (typical for include paths), so O(n²) in remove_duplicates is fine.
+    - Memory: lines holds strdup’d strings from read_files; sorted_lines shares pointers, avoiding
+      extra allocations but tying their lifetimes together—caller must free lines[i].
+    - Sorting: qsort with compare_strings (strcmp) is standard and fast for small arrays, ensuring
+      alphabetical order for consistency.
+
+  Maintenance Notes:
+    - Memory Ownership: sorted_lines points to lines’ strings—freeing lines[i] affects both. Document
+      this to avoid double-free or dangling pointers in callers (e.g., collect_code_completion_args).
+    - Edge Cases: If *count = 0, qsort skips safely; test with duplicate-heavy inputs to ensure
+      remove_duplicates scales.
+    - Extensibility: To filter more flag types (e.g., "-D"), adjust read_files and propagate here.
+      Add a sort option (e.g., reverse) by tweaking qsort comparator if needed.
+    - Error Handling: Relies on read_files exiting on failure—consider propagating errors (e.g., return
+      int) for more control in callers.
+    - Debugging: Log (via log_message) the final *count or sample lines to verify deduplication and sorting.
+*/
 
 // Function to store lines in the array
 // Parameters:
@@ -391,10 +1183,159 @@ void store_lines(const char *file1, const char *file2, char **lines, char **sort
   }
 }
 
+/*
+  Function Description:
+    Compares two strings for sorting purposes, used as a callback by qsort to order an array of strings.
+    This function determines which string comes first alphabetically by comparing their characters.
+
+  Parameters:
+    - a (const void *): A pointer to the first string pointer (e.g., a char **), treated as immutable.
+    - b (const void *): A pointer to the second string pointer (e.g., a char **), treated as immutable.
+
+  Return Value:
+    - int: Returns a negative value if a < b (a comes first), 0 if a == b (equal), or positive if a > b
+      (b comes first), per qsort’s comparison contract.
+
+  Detailed Steps:
+    1. Dereference Pointers:
+       - Casts a and b from void* to const char ** to access the string pointers they point to.
+       - Gets the actual strings by dereferencing once (*(const char **)a and *(const char **)b).
+    2. Compare Strings:
+       - Uses strcmp to compare the two strings character-by-character.
+       - Returns strcmp’s result directly (negative, 0, or positive).
+
+  Flow and Logic:
+    - Step 1: Unpack the pointers qsort gives us to reach the strings.
+    - Step 2: Let strcmp do the heavy lifting to decide order.
+    - Why this order? Dereference first to get the data; compare next to decide—simple and direct.
+
+  How It Works (For Novices):
+    - Imagine you’re sorting a pile of notes (like "-I/project", "-I/usr") with qsort, and it needs
+      help deciding which note goes before another.
+    - compare_strings is like your sorting rule:
+      - Step 1: qsort hands you two notes wrapped in boxes (a and b). You open the boxes (cast and
+        dereference) to see the notes inside (the strings).
+      - Step 2: Compare the notes with strcmp—like checking letter-by-letter: "-I/p" vs. "-I/u".
+        If "-I/p" comes first (p < u), say “negative”; if same, say “zero”; if "-I/u" first, say “positive.”
+    - It’s like telling qsort, “Put this one before that one” based on alphabetical order!
+
+  Why It Works (For Novices):
+    - Simplicity: Uses strcmp, a built-in tool, to compare letters, so you don’t have to write it yourself.
+    - Accuracy: Follows alphabetical rules (e.g., "a" < "b"), making the sorted list neat.
+    - Helpfulness: Gives qsort exactly what it needs (negative/zero/positive) to shuffle the notes.
+
+  Why It’s Designed This Way (For Maintainers):
+    - qsort Compatibility: Matches qsort’s required comparator signature (const void *, returns int),
+      enabling sorting in store_lines for UNIX config flags (per _POSIX_C_SOURCE).
+    - Efficiency: Relies on strcmp, an optimized standard library function, avoiding custom comparison
+      logic—fast and reliable for small string arrays like include paths.
+    - Type Safety: Uses const void * and proper casting to const char **, ensuring no modification of
+      the strings and safe access, as qsort passes pointers-to-pointers (char ** elements).
+    - Minimalism: Single-line implementation keeps it focused—compares strings, nothing else.
+    - Standard Behavior: strcmp’s lexicographical order (ASCII-based) is predictable and matches
+      typical sorting expectations for flags.
+
+  Maintenance Notes:
+    - Assumptions: Expects a and b to point to valid char **—NULL or invalid pointers crash strcmp.
+      Ensure store_lines (caller) populates lines safely (e.g., via read_files).
+    - Extensibility: To change sort order (e.g., reverse), swap a and b in strcmp or negate the result.
+      For case-insensitive sort, use strcasecmp (with proper includes).
+    - Edge Cases: Equal strings return 0, preserving their relative order (stable sort with qsort).
+      Test with duplicates from remove_duplicates to confirm.
+    - Debugging: If sorting fails (e.g., wrong order), log a and b values (via log_message) to trace
+      what qsort sees—rare, since strcmp is robust.
+    - Performance: strcmp is O(n) per comparison, fine for short flags; qsort’s O(n log n) dominates
+      overall cost in store_lines.
+*/
+
 // Function to compare strings
 int compare_strings(const void *a, const void *b) {
   return strcmp(*(const char **)a, *(const char **)b);
 }
+
+/*
+  Function Description:
+    Retrieves the CPU architecture (target) from the `clang --version` command and stores it in the
+    provided output buffer. It first checks the cache; if not cached, it runs the command, parses
+    the output for the "Target:" line, and caches the result for future use.
+
+  Parameters:
+    - output (char *): A caller-provided buffer where the CPU architecture string (e.g.,
+      "x86_64-unknown-linux-gnu") is stored. Must be at least MAX_LINE_LENGTH bytes.
+
+  Return Value:
+    - int: Returns 0 on success (target retrieved and stored); 1 on failure (e.g., fork, clang, or parsing fails).
+
+  Detailed Steps:
+    1. Check Cache:
+       - If completion_cache.is_valid is true and cpu_arch isn’t empty, copies cached value to output.
+       - Limits copy to MAX_LINE_LENGTH - 1, null-terminates, and returns 0.
+    2. Allocate Output Buffer:
+       - Allocates a temporary buffer (output_buffer) of MAX_OUTPUT size for clang’s output.
+    3. Set Up Pipe and Fork:
+       - Creates a pipe to capture clang’s output.
+       - Forks a child process; if fork fails, logs and returns 1.
+    4. Child Process:
+       - Redirects stdout to pipe’s write end (dup2), closes unused pipe ends, and runs `clang --version`.
+       - Exits child with 0 (success) or after execlp fails.
+    5. Parent Process:
+       - Closes pipe’s write end, reads from read end into output_buffer (up to MAX_OUTPUT - 1).
+       - Null-terminates buffer, closes pipe, waits for child to finish.
+    6. Parse Output:
+       - Searches for "Target: " in output_buffer with strstr.
+       - If found, extracts the target value (until newline), copies to output and cache, frees buffer, returns 0.
+       - If not found, frees buffer, returns 1.
+    7. Handle Errors:
+       - On fork failure, frees buffer and returns 1.
+
+  Flow and Logic:
+    - Step 1: Use cached value if available—fast path.
+    - Steps 2-5: Run clang and capture output if cache is empty—slow path setup.
+    - Step 6: Extract and store the target—slow path result.
+    - Step 7: Handle failures gracefully.
+    - Why this order? Cache check first optimizes; process setup then parsing follows UNIX exec pattern.
+
+  How It Works (For Novices):
+    - Imagine you need to know your computer’s “type” (like "x86_64") for clang to work right, and
+      you’ll write it in a notebook (output). You can check a memo (cache) or ask clang directly.
+    - get_clang_target is like this:
+      - Step 1: Look at your memo (completion_cache.cpu_arch). If it’s there and valid, copy it to
+        your notebook and done!
+      - Step 2: If not, get a big scratch pad (output_buffer) to jot down clang’s answer.
+      - Steps 3-5: Ask clang by shouting “--version” (fork, execlp) and listening through a tube (pipe).
+        The kid (child) shouts, you (parent) write it down.
+      - Step 6: Find the “Target:” line in the scratch pad (strstr), copy just the type (e.g., "x86_64")
+        to your notebook and memo, toss the scratch pad.
+      - Step 7: If asking fails (fork), say “Oops” and stop.
+    - It’s like checking a note or asking a friend for info, then saving it for next time!
+
+  Why It Works (For Novices):
+    - Speed: Uses the memo (cache) when possible, avoiding slow questions.
+    - Safety: Checks everything (cache, fork, output) to avoid mistakes.
+    - Smartness: Saves the answer (caches) so you don’t ask again.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Cache Optimization: Leverages completion_cache for speed, critical for UNIX (per _POSIX_C_SOURCE)
+      where `clang --version` is a costly system call—used in collect_code_completion_args.
+    - UNIX Process Model: Fork/pipe/exec pattern is standard for capturing command output, robust for
+      clang’s variable-length response.
+    - Memory Safety: Allocates output_buffer dynamically (MAX_OUTPUT), avoiding stack overflows; frees
+      it on all paths. Assumes output is caller-allocated (MAX_LINE_LENGTH).
+    - Parsing: Simple "Target: " search with strstr is efficient for clang’s known output format,
+      though fragile if clang changes (e.g., multi-line targets).
+    - Error Handling: Returns 1 on any failure (fork, parse), letting callers (e.g., collect_code_completion_args)
+      retry or fallback—minimal but effective.
+
+  Maintenance Notes:
+    - Cache Sync: Relies on completion_cache being valid—test with clear_cache/update_cache to ensure
+      cpu_arch stays current.
+    - Buffer Size: MAX_OUTPUT must fit clang’s full output (test with verbose clang); MAX_LINE_LENGTH
+      must fit target (rarely exceeds 32 chars, but verify).
+    - Error Logging: perror on fork failure helps, but consider log_message for parsing failures
+      (e.g., "Target: not found") to debug clang output changes.
+    - Extensibility: To grab more clang info (e.g., version), expand parsing—current focus is narrow.
+    - Robustness: No timeout for clang—hung child could stall; add waitpid timeout if this occurs.
+*/
 
 // Function to get clang target. Filters output from the command `clang --version`. Takes the CPU architecture from the line `Target:`.
 int get_clang_target(char *output) {
@@ -456,6 +1397,98 @@ int get_clang_target(char *output) {
     return 1;
   }
 }
+
+/*
+  Function Description:
+    Constructs a clang command string for code completion at a specific file position, using cached
+    or freshly gathered include paths and CPU architecture. This function prepares arguments for
+    clang to suggest completions (e.g., function names) at a given line and column in a source file.
+
+  Parameters:
+    - filename (const char *): Path to the source file (e.g., "/project/main.c"), not modified.
+    - line (int): Line number in the file where completion is requested (1-based).
+    - column (int): Column number in the file where completion is requested (1-based).
+
+  Return Value:
+    - char *: A dynamically allocated string containing the clang command (e.g., "clang -target x86_64 ..."),
+      or NULL on failure. Caller must free this string.
+
+  Detailed Steps:
+    1. Allocate Temporary Buffers:
+       - Calculates sizes based on filename length, allocates multiple char arrays and pointers for paths,
+         targets, and lines. Returns NULL if any allocation fails.
+    2. Validate File:
+       - Checks if filename exists with access; if not, logs and returns NULL.
+       - Resolves absolute path with realpath; if it fails, logs and returns NULL.
+    3. Initialize Cache:
+       - If not initialized (static flag), calls init_cache to set up completion_cache.
+    4. Use Cached Data (If Valid):
+       - Checks is_cache_valid with global_buffer_project_dir; if valid and data exists, builds command
+         with cached cpu_arch and header_paths, frees temps, returns command.
+    5. Find Config Files (If Cache Miss):
+       - Calls findFiles on file’s directory to locate .ccls and compile_flags.txt; if fails, logs and returns NULL.
+       - Stores result in global_buffer_project_dir.
+    6. Get CPU Target:
+       - Calls get_clang_target; if fails, logs and returns NULL. Stores in global_buffer_cpu_arc.
+    7. Build Config Paths:
+       - Constructs .ccls and compile_flags.txt paths from global_buffer_project_dir.
+    8. Process Include Paths:
+       - Initializes lines arrays, calls store_lines to read and sort paths, copies to global_buffer_header_paths.
+    9. Update Cache:
+       - Updates completion_cache with new project_dir, header_paths, and cpu_arch.
+    10. Build Command:
+        - Allocates command string, formats with clang options, target, include paths, and completion args.
+        - Frees temporary buffers (not lines[i], as they’re cached), returns command.
+
+  Flow and Logic:
+    - Steps 1-2: Setup and validate inputs.
+    - Step 3-4: Try cache for speed; if good, build and return.
+    - Steps 5-9: If cache misses, gather fresh data (configs, target, paths), cache it.
+    - Step 10: Construct final command from all data.
+    - Why this order? Validation first, cache for efficiency, fallback to full process, then assemble.
+
+  How It Works (For Novices):
+    - Imagine you’re asking clang for help finishing a sentence in your code (at line:column in filename),
+      and you need to give it a big instruction note (the command).
+    - collect_code_completion_args is like writing this note:
+      - Step 1: Get scratch paper (allocate buffers) to work with.
+      - Step 2: Check your codebook (filename) exists and get its full name (realpath).
+      - Step 3: Check your memo box (cache)—if it’s empty, set it up (init_cache).
+      - Step 4: If the memo has old notes (cache valid), use them to write "clang -target x86_64 ..." fast.
+      - Steps 5-6: If not, hunt for guidebooks (.ccls, compile_flags.txt) and ask clang its type (target).
+      - Steps 7-8: Write down where guidebooks are and copy their directions (include paths).
+      - Step 9: Save everything in the memo box for next time.
+      - Step 10: Write the full note (e.g., "clang -target x86_64 -I/project ... -code-completion-at=main.c:5:3").
+    - It’s like gathering tools and instructions to ask clang for a coding tip, reusing notes when possible!
+
+  Why It Works (For Novices):
+    - Speed: Checks the memo (cache) first to avoid slow work.
+    - Safety: Makes sure the file’s real and everything’s ready before asking clang.
+    - Smartness: Saves answers (caches) so next time’s faster.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Optimization: Cache-first approach (is_cache_valid, get_cached_include_paths) speeds up repeated
+      calls (e.g., in execute_code_completion_command), vital for UNIX (per _POSIX_C_SOURCE) where
+      file ops and clang calls are slow.
+    - Modularity: Builds on findFiles, get_clang_target, store_lines, and cache functions, reusing logic
+      for a complex task—clang code completion.
+    - Memory: Allocates command dynamically, ensuring flexibility; uses global buffers (e.g.,
+      global_buffer_project_dir) for persistence, but temp buffers are freed to avoid leaks.
+    - Robustness: Extensive error checks (access, realpath, findFiles) with NULL returns and logs
+      (log_message) ensure failures don’t crash—caller handles NULL.
+    - Clang Integration: Command format (-target, -fsyntax-only, -code-completion-at) matches clang’s
+      completion API, tailored for Vim integration via processCompletionDataFromString.
+
+  Maintenance Notes:
+    - Memory Leaks: Frees temps on all paths, but lines[i] persists in cache—caller must not free command
+      prematurely. Test with valgrind for leaks.
+    - Buffer Sizes: max_path_len (+256) and command_length (512 + variables) are estimates—test with
+      long filenames/paths to avoid truncation.
+    - Error Logging: Logs failures (e.g., “File does not exist”), but could detail why (e.g., errno) for
+      better tracing.
+    - Cache Sync: Relies on global buffers matching cache—test clear_cache/update_cache interactions.
+    - Extensibility: Add more clang flags (e.g., -D) by expanding store_lines or command format if needed.
+*/
 
 // Function to collect filename, line number, and column number
 char *collect_code_completion_args(const char *filename, int line, int column) {
@@ -718,6 +1751,84 @@ char *collect_code_completion_args(const char *filename, int line, int column) {
   return command;
 }
 
+/*
+  Function Description:
+    Executes a clang code completion command for a given file position and captures the output as a string.
+    This function builds the command using collect_code_completion_args, runs it via popen, and returns
+    the completion suggestions (e.g., function names) for processing (e.g., by Vim).
+
+  Parameters:
+    - filename (const char *): Path to the source file (e.g., "/project/main.c"), not modified.
+    - line (int): Line number in the file for completion (1-based).
+    - column (int): Column number in the file for completion (1-based).
+
+  Return Value:
+    - char *: A dynamically allocated string containing clang’s completion output, or NULL on failure.
+      Caller must free this string.
+
+  Detailed Steps:
+    1. Build Command:
+       - Calls collect_code_completion_args with filename, line, and column to get the clang command.
+       - If it returns NULL (e.g., file missing), logs and returns NULL.
+    2. Open Pipe:
+       - Uses popen to run the command in read mode ("r"), capturing stdout.
+       - If popen fails (e.g., fork error), logs, frees command, and returns NULL.
+    3. Read Output:
+       - Allocates a buffer (output) of MAX_OUTPUT size.
+       - Reads from pipe into buffer with fread (up to MAX_OUTPUT - 1 bytes).
+       - Null-terminates the buffer.
+    4. Clean Up:
+       - Closes pipe with pclose; frees command string.
+       - If fread read nothing (size == 0), frees output and returns NULL.
+       - Otherwise, returns output.
+
+  Flow and Logic:
+    - Step 1: Get the clang command ready.
+    - Step 2: Start clang and listen for its answer.
+    - Step 3: Grab what clang says into a note.
+    - Step 4: Finish up, check the note’s not empty, and hand it over.
+    - Why this order? Build first, execute next, read then clean—standard pipe/command pattern.
+
+  How It Works (For Novices):
+    - Imagine you’re asking clang for a list of word suggestions (completions) for your code at a
+      specific spot (filename:line:column), and you want that list as a note (the output string).
+    - execute_code_completion_command is like this:
+      - Step 1: Write a question for clang (e.g., "clang -code-completion-at=main.c:5:3") using
+        collect_code_completion_args. If you can’t write it, give up.
+      - Step 2: Shout the question through a tube (popen) so clang can answer back.
+      - Step 3: Get a blank note (allocate output), listen through the tube (fread), and write down
+        clang’s suggestions (e.g., "printf, scanf").
+      - Step 4: Close the tube (pclose), toss the question paper (free command), and if the note’s
+        empty, toss it too—otherwise, give it to you.
+    - It’s like asking a smart friend for help and taking notes on what they say!
+
+  Why It Works (For Novices):
+    - Ease: Builds the question for you, so you don’t have to.
+    - Safety: Checks every step (command, pipe, read) to avoid trouble.
+    - Usefulness: Gives you clang’s ideas in a handy note you can read later.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Integration: Ties into collect_code_completion_args for modularity, feeding clang’s completion
+      output to Vim via processCompletionDataFromString—core to UNIX tooling (per _POSIX_C_SOURCE).
+    - Pipe Usage: popen simplifies running clang and capturing stdout, standard for UNIX command
+      execution, though it’s less flexible than fork/exec.
+    - Memory: Allocates output dynamically (MAX_OUTPUT), avoiding stack issues; command is freed
+      early, but output persists for caller—clean ownership.
+    - Error Handling: NULL returns on failure (command build, popen, empty output) with logs
+      (log_message) allow tracing—caller (e.g., Vim plugin) decides next steps.
+    - Simplicity: Minimal parsing—raw output is returned, leaving interpretation to processCompletionDataFromString.
+
+  Maintenance Notes:
+    - Buffer Size: MAX_OUTPUT must fit clang’s completion output—test with large suggestion lists
+      (e.g., big structs) to avoid truncation.
+    - Error Detail: Logs "popen failed" but not why (e.g., errno)—add strerror for clarity if frequent.
+    - Memory Leaks: Frees command and output on all paths—verify with valgrind, especially on failure.
+    - Robustness: popen hangs if clang stalls—consider a timeout (not trivial with popen) or switch
+      to fork/pipe for control.
+    - Extensibility: To filter output here (e.g., strip errors), parse before returning—current raw
+      approach is simpler but less refined.
+*/
+
 // Function to execute the code completion command: `clang -fsyntax-only -Xclang -code-completion-macros -Xclang -code-completion-at=file.c:line:column file.c`
 char *execute_code_completion_command(const char *filename, int line, int column) {
   /* printf("DEBUG: Starting code completion for file %s at line %d, column %d\n",
@@ -820,6 +1931,86 @@ char *execute_code_completion_command(const char *filename, int line, int column
   /* printf("DEBUG: Returning result, length: %zu\n", strlen(result)); */
   return result;
 }
+
+/*
+  Function Description:
+    Filters clang’s code completion output to extract only the relevant completion suggestions,
+    removing extraneous lines and formatting them into a newline-separated string. This processes
+    raw clang output (from execute_code_completion_command) into a clean list for Vim.
+
+  Parameters:
+    - input (const char *): The raw clang output string (e.g., "COMPLETION: printf : ..."), not modified.
+
+  Return Value:
+    - char *: A dynamically allocated string with filtered completions (e.g., "printf\nscanf\n"), or
+      NULL on failure (e.g., memory allocation). Caller must free this string.
+
+  Detailed Steps:
+    1. Validate Input:
+       - If input is NULL or empty (input[0] == '\0'), returns NULL—no data to process.
+    2. Allocate Buffers:
+       - Allocates filtered_output (MAX_OUTPUT) for the result and line_buffer (MAX_LINE_LENGTH)
+         for parsing lines.
+       - If either allocation fails, frees both and returns NULL.
+    3. Initialize Parsing:
+       - Creates a copy of input with strdup to work with strtok; if fails, frees buffers and returns NULL.
+       - Sets initial filtered_length to 0 to track output size.
+    4. Tokenize and Filter:
+       - Uses strtok to split input_copy by newline, processing each line.
+       - For each line, checks if it starts with "COMPLETION: " (strstr).
+       - If it does, extracts the completion name (after "COMPLETION: " up to " :" or end), copies to
+         line_buffer, appends to filtered_output with a newline, updates filtered_length.
+       - Limits total length to MAX_OUTPUT - 1 to prevent overflow.
+    5. Clean Up and Return:
+       - Frees input_copy and line_buffer.
+       - If filtered_length is 0 (no completions), frees filtered_output and returns NULL.
+       - Otherwise, null-terminates filtered_output and returns it.
+
+  Flow and Logic:
+    - Step 1: Quick check to skip invalid input.
+    - Steps 2-3: Set up memory and a workable input copy.
+    - Step 4: Loop through lines, grab completions, build the output.
+    - Step 5: Wrap up, ensure something was found, return result.
+    - Why this order? Validation first, setup next, filter then clean—standard string processing flow.
+
+  How It Works (For Novices):
+    - Imagine clang hands you a messy note (input) with lines like "COMPLETION: printf : ..." and
+      junk like "Target: x86_64", and you want a neat list of just the suggestions (e.g., "printf\nscanf").
+    - filter_clang_output is like cleaning it up:
+      - Step 1: If the note’s blank or missing, toss it (return NULL).
+      - Step 2: Get a big clean sheet (filtered_output) and a scratch pad (line_buffer).
+      - Step 3: Copy the messy note (strdup) so you can cut it up (strtok).
+      - Step 4: Cut the note into lines. If a line says "COMPLETION: ", grab the word after it (e.g.,
+        "printf"), write it on the clean sheet with a newline, keep track of space used.
+      - Step 5: Toss the scratch stuff (free input_copy, line_buffer). If the clean sheet’s empty, toss
+        it too (return NULL); otherwise, finish it and hand it over.
+    - It’s like turning a cluttered brainstorm into a tidy to-do list!
+
+  Why It Works (For Novices):
+    - Focus: Picks only the useful bits (completions), ignoring clutter.
+    - Safety: Checks memory and space so it doesn’t mess up.
+    - Neatness: Gives you a simple list, one suggestion per line.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Purpose: Cleans clang’s verbose output (from execute_code_completion_command) for Vim via
+      processCompletionDataFromString, key for UNIX tooling (per _POSIX_C_SOURCE).
+    - String Handling: strtok splits lines efficiently; strdup protects input—standard C practices.
+    - Memory: Dynamic allocation (MAX_OUTPUT) handles variable output sizes; caller frees result,
+      consistent with execute_code_completion_command.
+    - Filtering: "COMPLETION: " check is specific to clang’s format—effective but tied to its output style.
+    - Error Handling: NULL on failure (input, memory, no completions) lets callers (e.g., Vim plugin)
+      handle gracefully, with minimal logging.
+
+  Maintenance Notes:
+    - Buffer Limits: MAX_OUTPUT and MAX_LINE_LENGTH must fit clang output and longest completion—
+      test with huge structs or namespaces to avoid truncation.
+    - Clang Format: Relies on "COMPLETION: " and " :"—if clang changes (e.g., "Completion:"), adjust
+      strstr checks. Log failures (via log_message) to catch this.
+    - Memory Leaks: Frees all temps on all paths—verify with valgrind, especially on early returns.
+    - Edge Cases: Empty lines or no completions return NULL—ensure callers (e.g., processCompletionDataFromString)
+      handle this (e.g., fallback to empty list).
+    - Extensibility: To keep more data (e.g., types after " :"), expand parsing—current focus is minimal.
+*/
 
 /* Substitute the output from the command
   clang -fsyntax-only -Xclang -code-completion-macros -Xclang -code-completion-at=file.c:line:column file.c

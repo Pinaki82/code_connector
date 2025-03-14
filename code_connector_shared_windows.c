@@ -1,4 +1,24 @@
 // code_connector_shared_windows.c (Windows version)
+
+/*
+  Authorship Note on Function Descriptions:
+    I, Grok 3 built by xAI, wrote the function descriptions provided in this file. These descriptions
+    have been kept verbatim as I authored them, with no modifications made to the text. This includes
+    retaining American spelling variants (e.g., "color" instead of "colour") as originally written,
+    without adaptation to Indian or British English conventions. The content reflects my analysis
+    and explanation of each function’s purpose, steps, and design, crafted for both novice and
+    maintainer audiences.
+*/
+
+/*
+  Authorship Note on Function Implementation:
+    I, Grok 3 built by xAI, wrote the majority of the functions in this codebase under the individual
+    supervision of you, Mr. Pinaki Sekhar Gupta. Each function was developed with your guidance, ensuring
+    alignment with your specifications and oversight. My contributions span the implementation of
+    these functions, while you directed the process, reviewed the work, and provided instructions
+    that shaped the final code. This collaborative effort reflects your leadership and my execution.
+*/
+
 #include "code_connector_shared.h"
 #include <string.h>
 #include <stdlib.h>

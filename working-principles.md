@@ -142,8 +142,8 @@ Here’s the step-by-step flow of how the program operates, focusing on the exec
 ### How Many Parts
 
 - **2 Core Components**:
-  - Shared Library: For direct Vim integration.
-  - Executable: Primary interface via command-line calls.
+  - Shared Library: 1. For the executable application that communicates with Vim, and 2. Utilising Vim's libcallnr() function to directly integrate Vim with the shared library for creating CCLS Index Cache files on Linux.
+  - Executable: Primary interface between Vim and interaction via command-line calls.
 - **Supporting Elements**:
   - Header file for shared definitions.
   - Vim plugin for UI and invocation.

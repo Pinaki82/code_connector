@@ -25,12 +25,173 @@ char global_buffer_project_dir[PATH_MAX];
 char global_buffer_cpu_arc[MAX_OUTPUT];
 // char global_buffer_header_paths[MAX_LINES][MAX_PATH_LENGTH]; // Define here, no 'static'
 
+/*
+  To avoid recalculation, we will be caching ceratin information, such as include paths, project directory, of the CPU architecture detected by the LLVM (namely, Clang here) etc.
+  We will introduce some caching and related mechanisms to avoid unnecessary recalculation and improve performance.
+  This includes some functions and global variables.
+*/
+
+/*
+  Function Description:
+    Initializes the global CodeCompletionCache structure to a clean, empty state.
+    This function resets the cache by clearing all its fields to zero or null values,
+    ensuring it’s ready to store new data about a project—like the project directory,
+    include paths, and CPU architecture. It’s a simple "reset button" for the cache.
+
+  Parameters: None
+    - No inputs are needed because it works on a global variable (completion_cache).
+
+  Return Value: None
+    - It doesn’t return anything; it just modifies the global cache in place.
+
+  Detailed Steps:
+    1. Clear the Entire Structure:
+       - Uses memset to set every byte of completion_cache to 0.
+       - completion_cache is a global struct (defined as static CodeCompletionCache earlier).
+       - This wipes out all fields—like pointers, integers, and arrays—in one go.
+    2. Mark Cache as Invalid:
+       - Sets the is_valid field to 0, meaning the cache isn’t ready to use yet.
+       - is_valid is likely an integer flag in the CodeCompletionCache struct.
+    3. Reset Include Path Count:
+       - Sets include_path_count to 0, indicating no include paths are stored.
+       - include_path_count tracks how many paths (e.g., -I/project/include) are cached.
+
+  Flow and Logic:
+    - Step 1: Wipe the slate clean with memset.
+    - Step 2: Explicitly say “not ready” by setting is_valid to 0.
+    - Step 3: Clear the tally of include paths to 0.
+    - Why this order? Clearing first ensures a blank slate, then specific resets confirm key fields.
+
+  How It Works (For Novices):
+    - Think of completion_cache as a notebook where we jot down project details—like where
+      the project lives (/project) or what paths the compiler needs (-I/project/include).
+    - Over time, this notebook might have old, messy notes from a previous project.
+    - init_cache is like ripping out all the pages and starting fresh:
+      - Step 1 (memset): Erases everything in the notebook instantly.
+      - Step 2 (is_valid = 0): Puts a “Not Ready” sticker on it so no one uses it too soon.
+      - Step 3 (include_path_count = 0): Resets the counter of notes (paths) to zero.
+    - It’s simple: no loops, no decisions—just three quick actions to reset the notebook.
+
+  Why It Works (For Novices):
+    - Safety: Wiping with memset ensures no leftover scribbles (random memory junk) cause trouble.
+    - Reliability: Setting is_valid and include_path_count explicitly makes sure the program
+      knows the notebook is empty and needs new notes before it’s useful.
+    - Speed: It’s fast because it doesn’t check anything—it just resets and moves on.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Global Scope: completion_cache is static and lives for the whole program. Without resetting,
+      old data (e.g., from /old_project) could stick around when you switch to /new_project,
+      causing bugs. This function prevents that.
+    - Efficiency: memset is a quick way to clear a big struct, faster than resetting each field
+      one-by-one. If CodeCompletionCache has 10 fields (defined in code_connector_shared.h),
+      memset handles them all in one shot.
+    - Clarity: Even though memset sets everything to 0, explicitly setting is_valid and
+      include_path_count makes the intent obvious: “This cache is empty and invalid.”
+      If a new field is added later, maintainers will see these lines and know to reset it too.
+    - UNIX Context: The program focuses on UNIX-like systems (Linux, macOS), as seen with
+      _POSIX_C_SOURCE. Resetting the cache here sets up later optimizations—like avoiding
+      repeated file searches or clang calls—which matter on these systems where such operations
+      can be slow.
+    - Simplicity: It’s a small, focused function with one job: reset the cache. This makes it
+      easy to debug and maintain—no surprises or hidden logic.
+
+  Maintenance Notes:
+    - Extensibility: If you add a new field to CodeCompletionCache (e.g., a timestamp),
+      memset will still clear it, but you might add an explicit reset here for clarity.
+    - Performance: The cache speeds up the program by storing data (e.g., CPU architecture
+      from clang --version). This reset ensures that speedup starts fresh each time.
+    - Debugging: Starting with all zeros makes it clear when the cache hasn’t been filled yet,
+      helping spot issues in functions like update_cache or collect_code_completion_args.
+    - No Dynamic Memory: It doesn’t allocate anything, so no risk of memory leaks here—just
+      modifies the existing global struct.
+*/
+
 // Cache functions (identical to UNIX)
 void init_cache(void) {
   memset(&completion_cache, 0, sizeof(CodeCompletionCache));
   completion_cache.is_valid = 0;
   completion_cache.include_path_count = 0;
 }
+
+/*
+  Function Description:
+    Clears the global CodeCompletionCache structure, resetting it to an empty state by freeing
+    dynamically allocated memory and zeroing out its fields. This function ensures the cache
+    is completely wiped, including any include paths stored as pointers, making it safe to reuse.
+
+  Parameters: None
+    - No inputs are required since it operates on the global completion_cache variable.
+
+  Return Value: None
+    - It modifies the global cache in place and doesn’t return anything.
+
+  Detailed Steps:
+    1. Free Allocated Include Paths:
+       - Loops through the include_paths array in completion_cache (up to include_path_count).
+       - Frees each non-NULL pointer (dynamically allocated strings like "-I/project/include").
+       - Sets each pointer to NULL after freeing to avoid double-free bugs.
+    2. Reset Path Count:
+       - Sets include_path_count to 0, indicating no include paths remain.
+    3. Mark Cache as Invalid:
+       - Sets is_valid to 0, signaling the cache is no longer valid or ready.
+    4. Clear Project Directory:
+       - Uses memset to zero out the project_dir array (likely a char[PATH_MAX]).
+    5. Clear CPU Architecture:
+       - Uses memset to zero out the cpu_arch array (likely a char[MAX_LINE_LENGTH]).
+
+  Flow and Logic:
+    - Step 1: Clean up memory by freeing include paths to prevent leaks.
+    - Step 2: Reset the counter to reflect the emptied state.
+    - Step 3: Mark the cache as unusable until refreshed.
+    - Steps 4-5: Wipe out stored strings (directory and CPU info) for a fresh start.
+    - Why this order? Free memory first to avoid leaks, then reset fields to match the empty state.
+
+  How It Works (For Novices):
+    - Imagine completion_cache as a filing cabinet with folders (fields) for project details:
+      - A drawer of include paths (pointers to strings like "-I/project/include").
+      - A label for how many paths (include_path_count).
+      - A “Ready” light (is_valid).
+      - A slot for the project folder name (project_dir).
+      - A slot for the CPU type (cpu_arch).
+    - clear_cache is like emptying the cabinet:
+      - Step 1: Takes each paper (include path) out of the drawer, shreds it (frees it), and
+        marks the slot empty (NULL).
+      - Step 2: Erases the tally of papers (sets count to 0).
+      - Step 3: Turns off the “Ready” light (is_valid = 0).
+      - Steps 4-5: Erases the project name and CPU type slots with a big eraser (memset).
+    - After this, the cabinet is empty and ready for new files, with no old papers left behind.
+
+  Why It Works (For Novices):
+    - Safety: Freeing pointers prevents memory leaks—leftover papers that clog up the computer.
+    - Cleanliness: Setting everything to zero ensures no old info tricks the program into using
+      stale data (e.g., an old project directory).
+    - Simplicity: It’s a straightforward “empty everything” process, easy to follow and trust.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Memory Management: The include_paths field is an array of pointers (char**) dynamically
+      allocated elsewhere (e.g., in update_cache via strdup). Freeing them here prevents leaks,
+      critical since completion_cache is global and persists across calls.
+    - Explicit Reset: Setting include_path_count and is_valid explicitly (beyond memset) makes
+      the intent clear: “This cache is empty and invalid.” It’s a safeguard against assuming
+      memset alone is enough.
+    - Field-Specific Clearing: Using memset on project_dir and cpu_arch (fixed-size char arrays)
+      ensures no partial strings linger, which could confuse later functions like is_cache_valid.
+    - UNIX Context: On UNIX systems (per _POSIX_C_SOURCE), memory and file operations are costly.
+      Clearing the cache fully here supports reusing it efficiently in functions like
+      collect_code_completion_args, avoiding redundant system calls.
+    - Robustness: Checking for non-NULL pointers before freeing avoids crashes if the cache was
+      partially initialized or already cleared.
+
+  Maintenance Notes:
+    - Extensibility: If new fields are added to CodeCompletionCache (e.g., a new char array or
+      pointer array), you’ll need to add corresponding cleanup here—free pointers or memset arrays.
+    - Safety: The NULL assignment after free prevents double-free bugs if clear_cache is called
+      twice, though the count reset ensures the loop won’t rerun unnecessarily.
+    - Performance: Freeing pointers one-by-one is necessary but slow for large include_path_count.
+      If this becomes a bottleneck, consider a bulk-free approach (though it’s rare for caches).
+    - Debugging: After this runs, completion_cache is in a predictable empty state (all zeros,
+      no pointers), making it easier to trace issues in subsequent cache updates.
+*/
 
 // Clear the cache
 void clear_cache(void) {
@@ -217,6 +378,93 @@ int create_default_config_files(const char *directory) {
   return return_value;
 }
 
+/*
+  Function Description:
+    Reads lines from two files (.ccls and compile_flags.txt) and stores specific lines containing
+    include flags (-I or -isystem) in a provided array. This function populates the lines array with
+    relevant compiler flags and updates the count of stored lines.
+
+  Parameters:
+    - file1 (const char *): Path to the first file (typically .ccls), not modified.
+    - file2 (const char *): Path to the second file (typically compile_flags.txt), not modified.
+    - lines (char **): An array of string pointers where matching lines are stored. Caller must
+      ensure it’s at least MAX_LINES in size and free the strings later.
+    - count (int *): Pointer to an integer tracking the number of lines stored; updated by the function.
+
+  Return Value: None
+    - Modifies lines and *count in place; exits program on file open failure.
+
+  Detailed Steps:
+    1. Open Files:
+       - Opens file1 and file2 in read mode using fopen.
+       - If either fails (e.g., file missing), prints an error and exits with EXIT_FAILURE.
+    2. Read file1 Lines:
+       - Uses fgets to read each line into a buffer (line, size MAX_LINE_LENGTH).
+       - Skips lines with "-Iinc" (using strstr).
+       - For lines with "-I" or "-isystem", removes newline (strcspn) and duplicates (strdup) into lines.
+       - Increments *count if space remains (less than MAX_LINES - 1).
+    3. Read file2 Lines:
+       - Repeats the same process for file2: reads lines, skips "-Iinc", stores "-I" or "-isystem" lines.
+    4. Clean Up:
+       - Closes both files with fclose.
+
+  Flow and Logic:
+    - Step 1: Open both files; fail fast if either can’t be read.
+    - Step 2: Process file1, filtering and storing relevant lines.
+    - Step 3: Process file2 similarly, appending to the same array.
+    - Step 4: Close files to free resources.
+    - Why this order? Open first ensures access; sequential reading keeps logic simple; cleanup avoids leaks.
+
+  How It Works (For Novices):
+    - Imagine two notebooks (.ccls and compile_flags.txt) with instructions for a tool (clang).
+      You want to copy only the lines about where to find parts (like "-I/project/include") into a
+      list (lines), counting how many you find (count).
+    - read_files is like this copying job:
+      - Step 1: Open both notebooks. If you can’t, yell “Error!” and quit.
+      - Step 2: Read file1 line-by-line. Skip boring lines ("-Iinc"), but if you see "-I" or "-isystem",
+        trim the end (no newline) and copy it to your list, adding to your tally (*count).
+      - Step 3: Do the same for file2, adding more lines to the same list.
+      - Step 4: Close the notebooks when done.
+    - It’s like making a shopping list from two recipe books, picking only the “where to buy” parts!
+
+  Why It Works (For Novices):
+    - Focus: Only grabs useful lines (-I, -isystem), ignoring junk like "-Iinc".
+    - Safety: Stops at MAX_LINES - 1 so your list doesn’t overflow.
+    - Simplicity: Reads one file, then the next, keeping it easy to follow.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Purpose: Extracts include flags for clang (e.g., in collect_code_completion_args), critical for
+      UNIX builds (per _POSIX_C_SOURCE) where project configs drive compilation.
+    - Hard Exit: Exiting on fopen failure assumes these files are essential—without them, the program
+      can’t proceed. This is aggressive but aligns with a setup where configs are expected (e.g., via findFiles).
+    - Filtering: Skipping "-Iinc" is a specific choice—likely a known irrelevant flag in your context.
+      It’s hardcoded, suggesting a narrow use case.
+    - Memory: Uses strdup to store lines, meaning the caller (e.g., store_lines) must free them later.
+      This delegates memory management upstream, typical in C.
+    - Bounds: Caps at MAX_LINES - 1 (leaving space for a NULL terminator or safety), preventing buffer
+      overflows but limiting total flags.
+
+  Maintenance Notes:
+    - Error Handling: exit(EXIT_FAILURE) is harsh—consider returning an error code (e.g., -1) and letting
+      callers handle it, or logging via log_message for debugging.
+    - Flexibility: Hardcoded "-Iinc" skip and "-I"/"-isystem" filter might miss other flags (e.g., "-D").
+      Add a parameter for custom filters if needed.
+    - Memory Leaks: If strdup fails (rare), it silently skips lines—no crash, but incomplete data.
+      Consider logging or checking allocation success.
+    - Buffer Size: MAX_LINE_LENGTH (assumed from code_connector_shared.h) must fit typical flags—test
+      with long paths to avoid truncation.
+    - Debugging: Add printf or log_message to trace which lines are stored, especially if count grows
+      unexpectedly.
+*/
+
+// Function to read the contents of two files and store them in an array
+// Parameters: file1, file2, lines, count
+// Meaning of parameters:
+//   file1: the first file to read, .ccls
+//   file2: the second file to read, compile_flags.txt
+//   lines: the array to store the lines in
+//   count: the number of lines read
+// Return value: none
 void read_files(const char *file1, const char *file2, char **lines, int *count) {
   FILE *f1 = fopen(file1, "r");
   FILE *f2 = fopen(file2, "r");
@@ -264,6 +512,79 @@ void read_files(const char *file1, const char *file2, char **lines, int *count) 
   fclose(f2);
 }
 
+/*
+  Function Description:
+    Removes duplicate strings from an array of strings (lines) and updates the count of unique entries.
+    This function ensures the list of include paths (e.g., "-I/project/include") has no repeats,
+    reducing redundancy and potential confusion for tools like clang.
+
+  Parameters:
+    - lines (char **): An array of string pointers containing the lines to process. Strings are assumed
+      to be dynamically allocated (e.g., via strdup) and will be freed if duplicated.
+    - count (int *): Pointer to an integer representing the current number of lines; updated to reflect
+      the number of unique lines after duplicates are removed.
+
+  Return Value: None
+    - Modifies the lines array and *count in place to remove duplicates.
+
+  Detailed Steps:
+    1. Iterate Through Lines:
+       - Uses two nested loops: outer loop (i) picks a line, inner loop (j) checks subsequent lines.
+       - Compares each line (lines[i]) with later lines (lines[j]) using strcmp.
+    2. Detect and Remove Duplicates:
+       - If a match is found (strcmp returns 0), frees the duplicate (lines[j]).
+       - Shifts all subsequent lines left to fill the gap (k loop moves lines[k+1] to lines[k]).
+       - Decrements *count to reflect the removal.
+       - Adjusts j to recheck the new line at j after shifting.
+    3. Continue Until Done:
+       - Outer loop continues until all lines are checked; inner loop adjusts dynamically as count shrinks.
+
+  Flow and Logic:
+    - Step 1: Start at the first line and look ahead for duplicates.
+    - Step 2: When a duplicate is found, erase it, slide everything over, and update the tally.
+    - Step 3: Keep going until no more lines to check.
+    - Why this order? Left-to-right ensures earlier lines stay, later duplicates go; shifting maintains
+      array continuity.
+
+  How It Works (For Novices):
+    - Imagine you have a list of notes (lines) like ["-I/project", "-I/usr", "-I/project"], and you
+      want only unique notes, counting how many are left (count).
+    - remove_duplicates is like cleaning up this list:
+      - Step 1: Pick the first note ("-I/project") and check the rest. The third note matches!
+      - Step 2: Cross out the third note (free it), slide "-I/usr" to the third spot, shorten the list
+        (decrease count), and check again from where you left off.
+      - Step 3: Move to the next note ("-I/usr"), check ahead (no matches), and keep going until done.
+    - It’s like tidying a messy list, tossing repeats, and keeping it neat and short!
+
+  Why It Works (For Novices):
+    - Fairness: Keeps the first copy of each note, removing later ones—simple rule.
+    - Tidiness: Shifts notes so there are no gaps, keeping the list ready to use.
+    - Accuracy: Updates count so you know exactly how many unique notes you have.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Efficiency Goal: Reduces redundant flags for clang (e.g., in collect_code_completion_args),
+      ensuring clean input on UNIX systems (per _POSIX_C_SOURCE) where duplicates could waste time.
+    - In-Place Operation: Modifies lines directly, avoiding new allocations, which is memory-efficient
+      but assumes the caller (e.g., store_lines) is okay with this.
+    - Memory Safety: Frees duplicates immediately, preventing leaks since lines are strdup’d (e.g.,
+      from read_files). Assumes caller frees remaining strings later.
+    - Simple Algorithm: Uses a basic O(n²) comparison with shifting—effective for small lists (typical
+      for include paths) but not optimized for huge arrays.
+    - Stability: Preserves order of first occurrences, which might matter for flag precedence in clang.
+
+  Maintenance Notes:
+    - Performance: For large *count (e.g., >100), O(n²) comparisons slow down—consider a hash table
+      or sorting first (like qsort in store_lines) if this becomes a bottleneck.
+    - Edge Cases: If *count is 0 or 1, it does nothing (safe); test with duplicates at start/end to
+      ensure shifting works.
+    - Memory: Assumes lines[i] are valid pointers—NULLs could crash strcmp. Add a NULL check if
+      read_files might store them.
+    - Extensibility: To ignore case or whitespace in duplicates, tweak strcmp—current exact match
+      is strict but fast.
+    - Debugging: Log (via log_message) when duplicates are found to trace unexpected repeats in configs.
+*/
+
+// Function to remove duplicate lines
 void remove_duplicates(char **lines, int *count) {
   for(int i = 0; i < *count; i++) {
     for(int j = i + 1; j < *count; j++) {
@@ -281,6 +602,92 @@ void remove_duplicates(char **lines, int *count) {
   }
 }
 
+/*
+  Function Description:
+    Reads include flags from two files (.ccls and compile_flags.txt), removes duplicates, sorts them,
+    and stores the results in two arrays: one for original order (lines) and one sorted (sorted_lines).
+    This function prepares a clean, ordered list of compiler flags for later use (e.g., by clang).
+
+  Parameters:
+    - file1 (const char *): Path to the first file (typically .ccls), not modified.
+    - file2 (const char *): Path to the second file (typically compile_flags.txt), not modified.
+    - lines (char **): Array of string pointers to store the unique lines in original order.
+      Caller must ensure it’s at least MAX_LINES and free the strings later.
+    - sorted_lines (char **): Array to store the same lines, but sorted alphabetically.
+      Same size and ownership rules as lines.
+    - count (int *): Pointer to an integer tracking the number of lines; updated with the final count.
+
+  Return Value: None
+    - Modifies lines, sorted_lines, and *count in place.
+
+  Detailed Steps:
+    1. Read and Store Lines:
+       - Calls read_files to extract "-I" and "-isystem" lines from file1 and file2 into lines.
+       - Updates *count with the initial number of lines found.
+    2. Remove Duplicates:
+       - Calls remove_duplicates on lines, reducing *count to reflect only unique entries.
+    3. Copy to Sorted Array:
+       - Loops through lines, copying each pointer to sorted_lines (up to *count).
+    4. Sort the Lines:
+       - If *count > 0, uses qsort with compare_strings to sort sorted_lines alphabetically.
+
+  Flow and Logic:
+    - Step 1: Gather all relevant lines from both files into lines.
+    - Step 2: Clean up by removing duplicates, keeping lines compact.
+    - Step 3: Duplicate the list into sorted_lines for sorting.
+    - Step 4: Sort sorted_lines if there’s anything to sort.
+    - Why this order? Read first to get raw data; deduplicate for efficiency; copy then sort to
+      preserve original order in lines while providing a sorted version.
+
+  How It Works (For Novices):
+    - Imagine you’re collecting directions from two guidebooks (.ccls and compile_flags.txt) about
+      where to find tools (like "-I/project/include"), and you want two lists: one as-is (lines) and
+      one alphabetized (sorted_lines), counting how many (count).
+    - store_lines is like this organizing task:
+      - Step 1: Flip through both books with read_files, jotting down directions (e.g., "-I/usr",
+        "-I/project") in your first notebook (lines), counting them (*count).
+      - Step 2: Cross out repeats with remove_duplicates (e.g., two "-I/usr" become one), updating
+        your tally.
+      - Step 3: Copy the cleaned list into a second notebook (sorted_lines).
+      - Step 4: If there’s anything in the second notebook, sort it A-to-Z (qsort) so it’s easy to read.
+    - It’s like making two handy lists from messy notes—one raw, one neat and sorted!
+
+  Why It Works (For Novices):
+    - Completeness: Grabs all the directions you need from both books.
+    - Cleanliness: No repeats cluttering things up.
+    - Order: Gives you a sorted version for quick lookup, keeping the original too.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Dual Output: Provides both original (lines) and sorted (sorted_lines) lists, offering flexibility—
+      original order might matter for clang flag precedence, while sorted aids debugging or display.
+    - Integration: Builds on read_files and remove_duplicates, reusing their logic for modularity,
+      key for UNIX config processing (per _POSIX_C_SOURCE).
+    - Efficiency: Removes duplicates before sorting, reducing qsort’s work (O(n log n) vs. larger n).
+      Assumes small *count (typical for include paths), so O(n²) in remove_duplicates is fine.
+    - Memory: lines holds strdup’d strings from read_files; sorted_lines shares pointers, avoiding
+      extra allocations but tying their lifetimes together—caller must free lines[i].
+    - Sorting: qsort with compare_strings (strcmp) is standard and fast for small arrays, ensuring
+      alphabetical order for consistency.
+
+  Maintenance Notes:
+    - Memory Ownership: sorted_lines points to lines’ strings—freeing lines[i] affects both. Document
+      this to avoid double-free or dangling pointers in callers (e.g., collect_code_completion_args).
+    - Edge Cases: If *count = 0, qsort skips safely; test with duplicate-heavy inputs to ensure
+      remove_duplicates scales.
+    - Extensibility: To filter more flag types (e.g., "-D"), adjust read_files and propagate here.
+      Add a sort option (e.g., reverse) by tweaking qsort comparator if needed.
+    - Error Handling: Relies on read_files exiting on failure—consider propagating errors (e.g., return
+      int) for more control in callers.
+    - Debugging: Log (via log_message) the final *count or sample lines to verify deduplication and sorting.
+*/
+
+// Function to store lines in the array
+// Parameters:
+//   file1: path to the first file, .ccls file
+//   file2: path to the second file, compile_flags.txt file
+//   lines: array to store the lines
+//   sorted_lines: array to store the sorted lines
+//   count: pointer to the number of lines
 void store_lines(const char *file1, const char *file2, char **lines, char **sorted_lines, int *count) {
   // Read files and store lines in the array
   read_files(file1, file2, lines, count);
@@ -297,6 +704,72 @@ void store_lines(const char *file1, const char *file2, char **lines, char **sort
   }
 }
 
+/*
+  Function Description:
+    Compares two strings for sorting purposes, used as a callback by qsort to order an array of strings.
+    This function determines which string comes first alphabetically by comparing their characters.
+
+  Parameters:
+    - a (const void *): A pointer to the first string pointer (e.g., a char **), treated as immutable.
+    - b (const void *): A pointer to the second string pointer (e.g., a char **), treated as immutable.
+
+  Return Value:
+    - int: Returns a negative value if a < b (a comes first), 0 if a == b (equal), or positive if a > b
+      (b comes first), per qsort’s comparison contract.
+
+  Detailed Steps:
+    1. Dereference Pointers:
+       - Casts a and b from void* to const char ** to access the string pointers they point to.
+       - Gets the actual strings by dereferencing once (*(const char **)a and *(const char **)b).
+    2. Compare Strings:
+       - Uses strcmp to compare the two strings character-by-character.
+       - Returns strcmp’s result directly (negative, 0, or positive).
+
+  Flow and Logic:
+    - Step 1: Unpack the pointers qsort gives us to reach the strings.
+    - Step 2: Let strcmp do the heavy lifting to decide order.
+    - Why this order? Dereference first to get the data; compare next to decide—simple and direct.
+
+  How It Works (For Novices):
+    - Imagine you’re sorting a pile of notes (like "-I/project", "-I/usr") with qsort, and it needs
+      help deciding which note goes before another.
+    - compare_strings is like your sorting rule:
+      - Step 1: qsort hands you two notes wrapped in boxes (a and b). You open the boxes (cast and
+        dereference) to see the notes inside (the strings).
+      - Step 2: Compare the notes with strcmp—like checking letter-by-letter: "-I/p" vs. "-I/u".
+        If "-I/p" comes first (p < u), say “negative”; if same, say “zero”; if "-I/u" first, say “positive.”
+    - It’s like telling qsort, “Put this one before that one” based on alphabetical order!
+
+  Why It Works (For Novices):
+    - Simplicity: Uses strcmp, a built-in tool, to compare letters, so you don’t have to write it yourself.
+    - Accuracy: Follows alphabetical rules (e.g., "a" < "b"), making the sorted list neat.
+    - Helpfulness: Gives qsort exactly what it needs (negative/zero/positive) to shuffle the notes.
+
+  Why It’s Designed This Way (For Maintainers):
+    - qsort Compatibility: Matches qsort’s required comparator signature (const void *, returns int),
+      enabling sorting in store_lines for UNIX config flags (per _POSIX_C_SOURCE).
+    - Efficiency: Relies on strcmp, an optimized standard library function, avoiding custom comparison
+      logic—fast and reliable for small string arrays like include paths.
+    - Type Safety: Uses const void * and proper casting to const char **, ensuring no modification of
+      the strings and safe access, as qsort passes pointers-to-pointers (char ** elements).
+    - Minimalism: Single-line implementation keeps it focused—compares strings, nothing else.
+    - Standard Behavior: strcmp’s lexicographical order (ASCII-based) is predictable and matches
+      typical sorting expectations for flags.
+
+  Maintenance Notes:
+    - Assumptions: Expects a and b to point to valid char **—NULL or invalid pointers crash strcmp.
+      Ensure store_lines (caller) populates lines safely (e.g., via read_files).
+    - Extensibility: To change sort order (e.g., reverse), swap a and b in strcmp or negate the result.
+      For case-insensitive sort, use strcasecmp (with proper includes).
+    - Edge Cases: Equal strings return 0, preserving their relative order (stable sort with qsort).
+      Test with duplicates from remove_duplicates to confirm.
+    - Debugging: If sorting fails (e.g., wrong order), log a and b values (via log_message) to trace
+      what qsort sees—rare, since strcmp is robust.
+    - Performance: strcmp is O(n) per comparison, fine for short flags; qsort’s O(n log n) dominates
+      overall cost in store_lines.
+*/
+
+// Function to compare strings
 int compare_strings(const void *a, const void *b) {
   return strcmp(*(const char **)a, *(const char **)b);
 }
@@ -549,6 +1022,85 @@ char *collect_code_completion_args(const char *filename, int line, int column) {
   return command;
 }
 
+/*
+  Function Description:
+    Executes a clang code completion command for a given file position and captures the output as a string.
+    This function builds the command using collect_code_completion_args, runs it via popen, and returns
+    the completion suggestions (e.g., function names) for processing (e.g., by Vim).
+
+  Parameters:
+    - filename (const char *): Path to the source file (e.g., "/project/main.c"), not modified.
+    - line (int): Line number in the file for completion (1-based).
+    - column (int): Column number in the file for completion (1-based).
+
+  Return Value:
+    - char *: A dynamically allocated string containing clang’s completion output, or NULL on failure.
+      Caller must free this string.
+
+  Detailed Steps:
+    1. Build Command:
+       - Calls collect_code_completion_args with filename, line, and column to get the clang command.
+       - If it returns NULL (e.g., file missing), logs and returns NULL.
+    2. Open Pipe:
+       - Uses popen to run the command in read mode ("r"), capturing stdout.
+       - If popen fails (e.g., fork error), logs, frees command, and returns NULL.
+    3. Read Output:
+       - Allocates a buffer (output) of MAX_OUTPUT size.
+       - Reads from pipe into buffer with fread (up to MAX_OUTPUT - 1 bytes).
+       - Null-terminates the buffer.
+    4. Clean Up:
+       - Closes pipe with pclose; frees command string.
+       - If fread read nothing (size == 0), frees output and returns NULL.
+       - Otherwise, returns output.
+
+  Flow and Logic:
+    - Step 1: Get the clang command ready.
+    - Step 2: Start clang and listen for its answer.
+    - Step 3: Grab what clang says into a note.
+    - Step 4: Finish up, check the note’s not empty, and hand it over.
+    - Why this order? Build first, execute next, read then clean—standard pipe/command pattern.
+
+  How It Works (For Novices):
+    - Imagine you’re asking clang for a list of word suggestions (completions) for your code at a
+      specific spot (filename:line:column), and you want that list as a note (the output string).
+    - execute_code_completion_command is like this:
+      - Step 1: Write a question for clang (e.g., "clang -code-completion-at=main.c:5:3") using
+        collect_code_completion_args. If you can’t write it, give up.
+      - Step 2: Shout the question through a tube (popen) so clang can answer back.
+      - Step 3: Get a blank note (allocate output), listen through the tube (fread), and write down
+        clang’s suggestions (e.g., "printf, scanf").
+      - Step 4: Close the tube (pclose), toss the question paper (free command), and if the note’s
+        empty, toss it too—otherwise, give it to you.
+    - It’s like asking a smart friend for help and taking notes on what they say!
+
+  Why It Works (For Novices):
+    - Ease: Builds the question for you, so you don’t have to.
+    - Safety: Checks every step (command, pipe, read) to avoid trouble.
+    - Usefulness: Gives you clang’s ideas in a handy note you can read later.
+
+  Why It’s Designed This Way (For Maintainers):
+    - Integration: Ties into collect_code_completion_args for modularity, feeding clang’s completion
+      output to Vim via processCompletionDataFromString—core to UNIX tooling (per _POSIX_C_SOURCE).
+    - Pipe Usage: popen simplifies running clang and capturing stdout, standard for UNIX command
+      execution, though it’s less flexible than fork/exec.
+    - Memory: Allocates output dynamically (MAX_OUTPUT), avoiding stack issues; command is freed
+      early, but output persists for caller—clean ownership.
+    - Error Handling: NULL returns on failure (command build, popen, empty output) with logs
+      (log_message) allow tracing—caller (e.g., Vim plugin) decides next steps.
+    - Simplicity: Minimal parsing—raw output is returned, leaving interpretation to processCompletionDataFromString.
+
+  Maintenance Notes:
+    - Buffer Size: MAX_OUTPUT must fit clang’s completion output—test with large suggestion lists
+      (e.g., big structs) to avoid truncation.
+    - Error Detail: Logs "popen failed" but not why (e.g., errno)—add strerror for clarity if frequent.
+    - Memory Leaks: Frees command and output on all paths—verify with valgrind, especially on failure.
+    - Robustness: popen hangs if clang stalls—consider a timeout (not trivial with popen) or switch
+      to fork/pipe for control.
+    - Extensibility: To filter output here (e.g., strip errors), parse before returning—current raw
+      approach is simpler but less refined.
+*/
+
+// Function to execute the code completion command: `clang -fsyntax-only -Xclang -code-completion-macros -Xclang -code-completion-at=file.c:line:column file.c`
 char *execute_code_completion_command(const char *filename, int line, int column) {
   //printf("DEBUG: fn execute_code_completion_command: Starting code completion for file %s at line %d, column %d\n", filename, line, column);
   char *command = collect_code_completion_args(filename, line, column);

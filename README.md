@@ -144,7 +144,8 @@ Ensure this file is placed in the `doc/` directory of Vim or the `doc/` director
 
 ## Screencast:
 
-![](assets/code_connector_screencast.webm)
+[code_connector_screencast.webm](https://github.com/user-attachments/assets/b5fe08c6-8c23-4f27-b3ea-f2816d9b88c7)
+
 
 ## Contributing
 

@@ -145,3 +145,7 @@ Ensure this file is placed in the `doc/` directory of Vim or the `doc/` director
 ## Contributing
 
 Contributions are welcome! Please follow the guidelines in the repository for submitting pull requests and reporting issues.
+
+## Maintenance
+
+Maintainers are encouraged to look at this document: [working-principles.md](https://github.com/Pinaki82/code_connector/working-principles.md)

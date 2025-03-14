@@ -148,4 +148,4 @@ Contributions are welcome! Please follow the guidelines in the repository for su
 
 ## Maintenance
 
-Maintainers are encouraged to look at this document: [working-principles.md](https://github.com/Pinaki82/code_connector/working-principles.md)
+Maintainers are encouraged to look at this document: [working-principles.md](https://github.com/Pinaki82/code_connector/blob/main/working-principles.md)

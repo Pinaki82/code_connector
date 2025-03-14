@@ -142,7 +142,7 @@ Here’s the step-by-step flow of how the program operates, focusing on the exec
 ### How Many Parts
 
 - **2 Core Components**:
-  - Shared Library: For direct Vim integration (partially redundant now).
+  - Shared Library: For direct Vim integration.
   - Executable: Primary interface via command-line calls.
 - **Supporting Elements**:
   - Header file for shared definitions.

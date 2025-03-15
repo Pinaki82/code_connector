@@ -129,6 +129,27 @@ Windows: >
     Or,
     mingw32-make config=Release
 <
+
+Post-Build Steps:
+
+Enter `code_connector/build/plugin`.
+
+Copy the following files to the `code_connector/plugin` directory:
+
+- `code_connector_executable`
+- `libcode_connector_shared.so` (on Linux systems)
+- `code_connector_executable.exe`
+- `ccls_index_gen_windows.exe`
+- `code_connector_shared.dll`
+
+Binary files for Intel 64-bit Linux and Microsoft Windows architectures
+are provided.
+
+Receiving Automatic Updates:
+
+After receiving an update via a plugin manager, please copy the binary files
+to the plugin directory (`code_connector/plugin`).
+
 ==============================================================================
 7. EXAMPLE COMMANDS                                 *code-connector-examples*
 

@@ -91,6 +91,10 @@ Copy the following files to the `code_connector/plugin` directory:
 
 Binary files for Intel 64-bit Linux and Microsoft Windows architectures are provided.
 
+### Receiving Automatic Updates:
+
+After receiving an update via a plugin manager, please copy the binary files to the plugin directory (`code_connector/plugin`).
+
 ## Example Commands
 
 ### Linux:

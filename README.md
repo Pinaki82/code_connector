@@ -146,7 +146,6 @@ Ensure this file is placed in the `doc/` directory of Vim or the `doc/` director
 
 [code_connector_screencast.webm](https://github.com/user-attachments/assets/b5fe08c6-8c23-4f27-b3ea-f2816d9b88c7)
 
-
 ## Contributing
 
 Contributions are welcome! Please follow the guidelines in the repository for submitting pull requests and reporting issues.
